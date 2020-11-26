@@ -26,10 +26,16 @@
 2. Try to find saved contours in a static images of the clock;
 
 ## Targets
-1. Define hands by templates on an image [+]
-2. Define a line by a template [+]
-3. Define time by lines [-]
+1. Detect a clock face [-]:
+2. Select a needed region [-]
+3. Detect a direction vector of a template [-]
+4. Rotate the template to degrees [-]
+5. Compare a template and the selected region [-]
+6. Build a graphic by similirity coefficients [-]
+7. Define the maximum by the graphic [-]
 
 ## References
 1. [Approx](https://docs.opencv.org/2.4/doc/tutorials/imgproc/shapedescriptors/bounding_rects_circles/bounding_rects_circles.html)
 2. [Find center](https://issue.life/questions/49068444)
+3. [Clock Reader](https://answers.opencv.org/question/212673/analog-clock-read/)
+4. [Reader](https://www.cs.bgu.ac.il/~ben-shahar/Teaching/Computational-Vision/StudentProjects/ICBV151/ICBV-2015-1-ChemiShumacher/Report.pdf)

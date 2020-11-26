@@ -6,8 +6,8 @@ import imutils
 
 from matplotlib import pyplot as plt
 
-from clockFace import ClockFace
-from utilities import getDistanceBetweenPoints, rotateImage, imageFilteringByMasks
+from detector import clock_face as cf
+from detector import utilities as util
 
 
 class DetectorTemplate:
@@ -37,7 +37,7 @@ class DetectorTemplate:
         selectedParts = []
 
         for angle in np.arange(0, 360, 1):
-            rotated, mask = rotateImage(self.template, angle)
+            rotated, mask = util.rotateImage(self.template, angle)
             cv2.imshow('rotated', rotated)
 
             val, loc, region = DetectorTemplate.findTemplate(
@@ -45,7 +45,8 @@ class DetectorTemplate:
             )
 
             copy_image = image.copy()
-            cv2.rectangle(copy_image, loc, (loc[0] + region.shape[1], loc[1] + region.shape[0]), (0, 0, 255), 2)
+            cv2.rectangle(
+                copy_image, loc, (loc[0] + region.shape[1], loc[1] + region.shape[0]), (0, 0, 255), 2)
             cv2.imshow('image', copy_image)
             cv2.waitKey(2)
 
@@ -70,76 +71,32 @@ class DetectorTemplate:
 
         return None
 
-    def detectBySIFT(self, image, show_detected=False):
-        """Detects a template in an image by SIFT.
+    def detectWithoutMask(self, image, show_detected=False):
+        selectedParts = []
 
-        Args:
-            image (numpy.ndarray): The input image.
-            show_detected (bool, optional): Defines if it needs to show a found region. Defaults to False.
-        """
+        for angle in np.arange(0, 360, 1):
+            rotated = imutils.rotate_bound(self.template, angle)
 
-        MIN_MATCH_COUNT = 10
+            val, loc, region = DetectorTemplate.findTemplate(
+                image, rotated, self.method
+            )
 
-        gray_template = cv2.cvtColor(self.template, cv2.COLOR_BGR2GRAY)
-        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            if show_detected:
+                copy_image = image.copy()
+                cv2.rectangle(
+                    copy_image, loc, (loc[0] + region.shape[1], loc[1] + region.shape[0]), (0, 0, 255), 2)
 
-        sift = cv2.xfeatures2d.SIFT_create()
+                cv2.imshow('rotated', rotated)
+                cv2.imshow('image', copy_image)
+                cv2.waitKey(2)
 
-        kp1, des1 = sift.detectAndCompute(gray_template, None)
-        kp2, des2 = sift.detectAndCompute(gray_image, None)
+            selectedParts.append((val, loc, region))
 
-        FLANN_INDEX_KDTREE = 0
-        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=4)
-        search_params = dict(checks=100)
+        if len(selectedParts) > 0:
+            selectedParts = self.__sortSelectedParts(selectedParts)
+            return selectedParts[0]
 
-        flann = cv2.FlannBasedMatcher(index_params, search_params)
-        matches = flann.knnMatch(des1, des2, k=2)
-
-        # store all the good matches as per Lowe's ratio test.
-        good = []
-        for m, n in matches:
-            if m.distance < 0.8*n.distance:
-                good.append(m)
-
-        if len(good) > MIN_MATCH_COUNT:
-            src_pts = np.float32(
-                [kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
-            dst_pts = np.float32(
-                [kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
-
-            M, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-            matchesMask = mask.ravel().tolist()
-
-            h, w = gray_template.shape
-            pts = np.float32([[0, 0], [0, h-1], [w-1, h-1],
-                              [w-1, 0]]).reshape(-1, 1, 2)
-            dst = cv2.perspectiveTransform(pts, M)
-
-            area = cv2.contourArea(np.int32(dst))
-            area_tempalate = self.template.shape[0] * self.template.shape[1]
-
-            if area < area_template or area > 2 * area_template:
-                return
-
-            if len(np.uint32(dst)) != 4:
-                return
-
-            image = cv2.polylines(
-                image, [np.int32(dst)], True, 255, 3, cv2.LINE_AA)
-        else:
-            print("Not enough matches are found - %d/%d" %
-                  (len(good), MIN_MATCH_COUNT))
-            matchesMask = None
-
-        if show_detected:
-            draw_params = dict(matchColor=(0, 255, 0),  # draw matches in green color
-                            singlePointColor=None,
-                            matchesMask=matchesMask,  # draw only inliers
-                            flags=2)
-
-            img3 = cv2.drawMatches(self.template.copy(), kp1, image, kp2,
-                                good, None, **draw_params)
-            plt.imshow(img3, 'gray'), plt.show()
+        return None
 
     def __sortSelectedParts(self, selected):
         # Sort by val
@@ -162,8 +119,8 @@ class DetectorTemplate:
                 loc,
                 region
             ):
-                val is the similarity coefficientю
-                loc is the x0, y0 of a part where the template was found/
+                val is the similarity coefficient.
+                loc is the x0, y0 of a part where the template was found.
                 region is the part of the image where the template was found.
         """
 

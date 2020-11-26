@@ -1,1 +1,1 @@
-__all__ = ['detector_template', 'utilities']
+__all__ = ['detector_template', 'clock_face', 'utilities']

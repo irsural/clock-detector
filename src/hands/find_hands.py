@@ -14,8 +14,8 @@ def find_contours(img1, img2):
     kernel = np.ones((3, 3), np.uint8)
     thresh_frame = cv2.erode(thresh_frame, kernel, iterations=3)
 
-    cv2.imshow('f', diff_frame)
-    cv2.imshow('g', thresh_frame)
+    # cv2.imshow('f', diff_frame)
+    # cv2.imshow('g', thresh_frame)
 
     cnts, hier = cv2.findContours(
         thresh_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE
@@ -50,8 +50,8 @@ def get_hands(contours):
     return hands
 
 if __name__ == "__main__":
-    img1 = cv2.imread('2.jpg', cv2.IMREAD_COLOR)
-    img2 = cv2.imread('1.jpg', cv2.IMREAD_COLOR)
+    img1 = cv2.imread('cache/images/2.jpg', cv2.IMREAD_COLOR)
+    img2 = cv2.imread('cache/images/1.jpg', cv2.IMREAD_COLOR)
 
     cnts = find_contours(img1, img2)
 
@@ -59,4 +59,4 @@ if __name__ == "__main__":
         list_hands = get_hands(cnts)
 
         for idx, img in enumerate(list_hands):
-            cv2.imwrite(f'hands/{idx+1}.jpg', img)
+            cv2.imwrite(f'cache/template/{idx+1}.jpg', img)
