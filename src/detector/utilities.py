@@ -136,3 +136,28 @@ def getAngleBetweenVectors(vector1, vector2):
         (sqrt(vector1[0] * vector1[0] + vector1[1] * vector1[1]) *
          sqrt(vector2[0] * vector2[0] + vector2[1] * vector2[1]))
     return (acos(cosAngle) * 180) / pi
+
+def getExtremes(graph, dist=5):
+    """Detect all locals extremes on a graph.
+
+    Args:
+        graph ([(x, y)]): Points on the graph.
+        dist (int): The max possible distance between points by x.
+
+    Returns:
+        [(x, y)]: All locals extremes on the graph.
+    """
+
+    extremes = []
+    x, y = graph[0]
+
+    for i in np.arange(1, len(graph), 1):
+        if graph[i][0] - graph[i - 1][0] <= dist:
+            if y > graph[i][1]:
+                x, y = graph[i]
+        else:
+            extremes.append((x, y))
+            x, y = graph[i]
+
+    extremes.append((x, y))
+    return extremes

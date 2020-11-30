@@ -1,12 +1,15 @@
-import sys
+import copy
 import math
-import pytesseract
+import sys
 import cv2
 import numpy as np
+import pytesseract
+
+from matplotlib import pyplot as plt
+from pytesseract import Output
 from detector import utilities
 
-from pytesseract import Output
-
+import config
 
 class ClockFace:
     """This class is used for computing working with a clock faceю
@@ -39,9 +42,6 @@ class ClockFace:
     def computeClockFace(self):
         filtredImage = self.__filterImageSecond(self.image)
 
-        xCenter = filtredImage.shape[1] // 2
-        yCenter = filtredImage.shape[0] // 2
-
         circles = cv2.HoughCircles(
             filtredImage, cv2.HOUGH_GRADIENT, 1, 1)
 
@@ -49,14 +49,30 @@ class ClockFace:
             circles = np.round(circles[0, :]).astype("int")
             circles = sorted(
                 circles, key=lambda circle: circle[2], reverse=True)
+
             xMax, yMax, rMax = circles[0]
 
             self.center = (xMax, yMax)
             self.radius = rMax
+            cutImage = self.__cutImage(self.image.copy(), (xMax, yMax), rMax)
 
-            return self.__cutImage(self.image, (xMax, yMax), rMax)
+            return cutImage, (xMax, yMax), rMax
         else:
             return self.image
+
+    def wrapPolarImage(self, image, width=config.WRAP_POLAR_WIDTH,
+                       height=config.WRAP_POLAR_HEIGHT):
+        rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        centre = rotate.shape[0] // 2
+
+        polarImage = cv2.warpPolar(rotate, (height, width), (centre, centre), centre,
+                                   cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
+
+        cropImage = copy.deepcopy(polarImage[0:width, 15:height])
+        # cropImage = cropImage.transpose(1, 0, 2)[::-1]
+        cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        return cropImage
 
     def computeCentralVector(self, image):
         """Computing the central vector
@@ -121,7 +137,7 @@ class ClockFace:
 
         Args:
             image (numpy.ndarray): The image that is needed to cut.
-            point (turple(int, int)): The cetner of the clock face. 
+            point (turple(int, int)): The cetner of the clock face.
             radius (int): The radius of the clock face.
 
         Returns:
@@ -153,10 +169,12 @@ class ClockFace:
 
     def __filterImageSecond(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.bilateralFilter(gray, 20, 90, 110)
-        thresholdImage = cv2.adaptiveThreshold(
+        blur = cv2.bilateralFilter(gray, 50, 90, 110)
+        thresh = cv2.adaptiveThreshold(
             blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 3, 5)
-        edges = cv2.Canny(thresholdImage, 50, 200, 255)
+        kernel = np.ones((5, 4), np.uint8)
+        erosion = cv2.erode(thresh, kernel, iterations=3)
+        edges = cv2.Canny(erosion, 125, 200, 255)
         return edges
 
     def __isDigit(self, field):
