@@ -11,6 +11,7 @@ from detector import utilities
 
 import config
 
+
 class ClockFace:
     """This class is used for computing working with a clock faceю
     """
@@ -40,25 +41,36 @@ class ClockFace:
         self.radius = None
 
     def computeClockFace(self):
-        filtredImage = self.__filterImageSecond(self.image)
+        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.medianBlur(gray, 25)
+
+        if __debug__:
+            plt.imshow(blurred, cmap='gray', vmin=0, vmax=255)
+            plt.show()
 
         circles = cv2.HoughCircles(
-            filtredImage, cv2.HOUGH_GRADIENT, 1, 1)
+            blurred,
+            cv2.HOUGH_GRADIENT,
+            1,
+            config.CLOCK_FACE_MIN_DIST,
+            param1=config.CLOCK_FACE_PARAM_1,
+            param2=config.CLOCK_FACE_PARAM_2,
+            minRadius=config.CLOCK_FACE_MIN_RADIUS,
+            maxRadius=config.CLOCK_FACE_MAX_RADIUS
+        )
 
         if circles is not None:
-            circles = np.round(circles[0, :]).astype("int")
-            circles = sorted(
-                circles, key=lambda circle: circle[2], reverse=True)
+            circles = np.uint16(np.around(circles))
+            x, y, r = circles[0][0]
 
-            xMax, yMax, rMax = circles[0]
+            self.center = (x, y)
+            self.radius = r
 
-            self.center = (xMax, yMax)
-            self.radius = rMax
-            cutImage = self.__cutImage(self.image.copy(), (xMax, yMax), rMax)
+            cutImage = self.__cutImage(self.image.copy(), (x, y), r)
 
-            return cutImage, (xMax, yMax), rMax
+            return cutImage, (x, y), r
         else:
-            return self.image
+            return None, None, None
 
     def wrapPolarImage(self, image, width=config.WRAP_POLAR_WIDTH,
                        height=config.WRAP_POLAR_HEIGHT):
@@ -69,7 +81,6 @@ class ClockFace:
                                    cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
 
         cropImage = copy.deepcopy(polarImage[0:width, 15:height])
-        # cropImage = cropImage.transpose(1, 0, 2)[::-1]
         cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         return cropImage
@@ -166,16 +177,6 @@ class ClockFace:
         thresh = cv2.adaptiveThreshold(
             blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
         return thresh
-
-    def __filterImageSecond(self, image):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.bilateralFilter(gray, 50, 90, 110)
-        thresh = cv2.adaptiveThreshold(
-            blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 3, 5)
-        kernel = np.ones((5, 4), np.uint8)
-        erosion = cv2.erode(thresh, kernel, iterations=3)
-        edges = cv2.Canny(erosion, 125, 200, 255)
-        return edges
 
     def __isDigit(self, field):
         """Checks the field is a digit or not.
