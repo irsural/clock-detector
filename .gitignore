@@ -142,5 +142,4 @@ cython_debug/
 /src/cache/*
 
 # DS_Store
-*/.DS_Store
-.DS_Store
+*.DS_Store
