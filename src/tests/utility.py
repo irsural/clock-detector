@@ -4,7 +4,7 @@ import sys
 def settings_sys_path():
     need_dir = 'src'
     current_path = os.path.abspath(os.curdir)
-    
+
     while os.path.basename(current_path) != need_dir:
         os.chdir('..')
         current_path = os.path.abspath(os.curdir)

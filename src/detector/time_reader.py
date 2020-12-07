@@ -16,20 +16,20 @@ class TimeReader:
         self.image = image
 
     def read(self):
-        preparedImage = self.prepareImage(self.image)
+        filtred_image = self.prepare_image(self.image)
 
         if __debug__:
-            plt.imshow(preparedImage, cmap='gray', vmin=0, vmax=255)
+            plt.imshow(filtred_image, cmap='gray', vmin=0, vmax=255)
             plt.show()
 
         # I don't fucking know what parameters need here
-        lines = cv2.HoughLinesP(preparedImage, rho=3, theta=np.pi / 180,
+        lines = cv2.HoughLinesP(filtred_image, rho=3, theta=np.pi / 180,
                                 threshold=5, minLineLength=15, maxLineGap=0)
         # soring by x1
         lines = sorted(lines, key=lambda line: line[0][0])
         graph = [(line[0][0], line[0][3]) for line in lines]
 
-        hands = util.getExtremes(graph)
+        hands = util.find_local_extremes(graph)
         hands = sorted(hands, key=lambda hand: hand[1])  # sorting by length
 
         if __debug__:
@@ -62,20 +62,19 @@ class TimeReader:
 
         return int(h / hours), int(m / minutes), math.ceil(s / minutes)
 
-    def prepareImage(self, image):
+    def prepare_image(self, image):
         self.face = cf.ClockFace(image)
-        # cutImage, centre, radius = self.face.computeClockFace()
-        cutImage, centre, radius = self.face.computeClockFace()
+        cut_image, centre, radius = self.face.compute_clock_face()
 
-        if cutImage is None:
+        if cut_image is None:
             print('Cannot find a clock face! Aborting...')
             sys.exit()
 
         if __debug__:
-            plt.imshow(cutImage, cmap='gray', vmin=0, vmax=255)
+            plt.imshow(cut_image, cmap='gray', vmin=0, vmax=255)
             plt.show()
 
-        rotated = self.face.wrapPolarImage(cutImage)
+        rotated = self.face.wrap_polar_face(cut_image)
         gray = cv2.cvtColor(rotated, cv2.COLOR_RGB2GRAY)
 
         if __debug__:
