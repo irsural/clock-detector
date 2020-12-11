@@ -1,138 +1,88 @@
 import copy
-import math
-import sys
 import cv2
 import numpy as np
-import pytesseract
-
-from matplotlib import pyplot as plt
-from pytesseract import Output
-from detector import utilities
-
 import config
 
+from matplotlib import pyplot as plt
+
+from detector import utilities
+from detector.exceptions import *
+
 class ClockFace:
-    """This class is used for computing working with a clock faceю
+    """This class is used for computing working with a clock face.
     """
 
-    def __init__(self,
-                 image=None,
-                 minHeighContour=20,
-                 maxHeighContour=40,
-                 minWidthContour=15,
-                 maxWidthContour=40,
-                 minCountourArea=250,
-                 maxContourArea=700):
+    def __init__(self, image=None, is_clock=True):
         self.image = image
-
-        self.minHeighContour = minHeighContour
-        self.maxHeighContour = maxHeighContour
-
-        self.minWidthContour = minWidthContour
-        self.maxWidthContour = maxWidthContour
-
-        self.minCountourArea = minCountourArea
-        self.maxContourArea = maxContourArea
-
-        self.tesseractConfig = r'--oem 3 --psm 6 outputbase digits'
-
+        self.is_clock = is_clock
         self.center = None
         self.radius = None
 
-    def computeClockFace(self):
-        filtredImage = self.__filterImageSecond(self.image)
+    def seach_clock_face(self):
+        """Searches a clock face in an image.
+
+        Raises:
+            ClockFaceSearchingError: Raise if a clock face was not found.
+
+        Returns:
+            turple(cut_image, (x, y), r):
+                cut_image is an image that cut by the circle's boards.
+                (x, y) - the central point of the clock face.
+                r - the radius of the clock face.
+        """
+
+        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.medianBlur(gray, 25)
 
         circles = cv2.HoughCircles(
-            filtredImage, cv2.HOUGH_GRADIENT, 1, 1)
+            blurred,
+            cv2.HOUGH_GRADIENT,
+            1,
+            config.CLOCK_FACE_MIN_DIST,
+            param1=config.CLOCK_FACE_PARAM_1,
+            param2=config.CLOCK_FACE_PARAM_2,
+            minRadius=config.CLOCK_FACE_MIN_RADIUS_CLOCK if self.is_clock else config.CLOCK_FACE_MIN_RADIUS_TIMER,
+            maxRadius=config.CLOCK_FACE_MAX_RADIUS_CLOCK if self.is_clock else config.CLOCK_FACE_MAX_RADIUS_TIMER
+        )
 
         if circles is not None:
-            circles = np.round(circles[0, :]).astype("int")
-            circles = sorted(
-                circles, key=lambda circle: circle[2], reverse=True)
+            circles = np.uint16(np.around(circles))
+            x, y, r = circles[0][0]
 
-            xMax, yMax, rMax = circles[0]
+            self.center = (x, y)
+            self.radius = r
 
-            self.center = (xMax, yMax)
-            self.radius = rMax
-            cutImage = self.__cutImage(self.image.copy(), (xMax, yMax), rMax)
+            cutImage = self.cut_image(self.image.copy(), (x, y), r)
 
-            return cutImage, (xMax, yMax), rMax
+            return cutImage, (x, y), r
         else:
-            return self.image
+            raise ClockFaceSearchingError
 
-    def wrapPolarImage(self, image, width=config.WRAP_POLAR_WIDTH,
+    def wrap_polar_face(self, image, width=config.WRAP_POLAR_WIDTH,
                        height=config.WRAP_POLAR_HEIGHT):
+        """Wraps the clock face up.
+
+        Args:
+            image (numpy.ndarray): The clock face image.
+            width (int, optional): The width of the final image. Defaults to config.WRAP_POLAR_WIDTH.
+            height (int, optional): The height of the final image. Defaults to config.WRAP_POLAR_HEIGHT.
+
+        Returns:
+            numpy.narray: The final wrapped image.
+        """
+
         rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
         centre = rotate.shape[0] // 2
 
         polarImage = cv2.warpPolar(rotate, (height, width), (centre, centre), centre,
                                    cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
 
-        cropImage = copy.deepcopy(polarImage[0:width, 15:height])
-        # cropImage = cropImage.transpose(1, 0, 2)[::-1]
+        cropImage = copy.deepcopy(polarImage[0:width, 25:height])
         cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         return cropImage
 
-    def computeCentralVector(self, image):
-        """Computing the central vector
-
-        Returns:
-            turple(centralVector, centralPoint): The computed data.
-        """
-
-        thresh = self.__filterImageFirst(image)
-
-        contours, _ = cv2.findContours(
-            thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-        numbers = []
-
-        for cnt in contours:
-            areaField = cv2.contourArea(cnt)
-
-            if areaField >= self.minCountourArea and areaField <= self.maxContourArea:
-                [x, y, w, h] = cv2.boundingRect(cnt)
-
-                # accuracy = 0.03 * cv2.arcLength(cnt, True)
-                # approx = cv2.approxPolyDP(cnt, accuracy, True)
-                # cv2.drawContours(image, [approx], 0, (0, 255, 0), 1)
-                # cv2.imshow('Approximate Contours', image)
-                # if cv2.waitKey() == 27:
-                #     sys.exit()
-
-                if w >= self.minWidthContour and w <= self.maxWidthContour \
-                        and h >= self.minHeighContour and h <= self.maxHeighContour:
-                    isDigit, digit = self.__isDigit(thresh[y:y+h, x:x+w])
-
-                    if not isDigit or digit not in [3, 9]:
-                        continue
-
-                    pointCenter = ((2 * x + w) // 2, (2 * y + h) // 2)
-                    numbers.append((digit, areaField, pointCenter))
-
-        max3 = None
-        max9 = None
-
-        for i in range(len(numbers)):
-            if numbers[i][0] == 3:
-                if max3 is None or numbers[i][1] > max3[1]:
-                    max3 = numbers[i]
-            elif numbers[i][0] == 9:
-                if max9 is None or numbers[i][1] > max9[1]:
-                    max9 = numbers[i]
-
-        (x1, y1) = max3[2]
-        (x2, y2) = max9[2]
-
-        if y1 < y2:
-            y1, y2 = y2, y1
-
-        centralPoint = ((x1 + x2) // 2, (y1 + y2) // 2)
-        centralVector = (x2 - x1, y2 - y1)
-
-        return centralVector, centralPoint
-
-    def __cutImage(self, image, point, radius):
+    def cut_image(self, image, point, radius):
         """Cuts an image by a clock face.
 
         Args:
@@ -150,42 +100,3 @@ class ClockFace:
         dy1 = dy0 + 2 * radius
 
         return image[dy0:dy1, dx0:dx1]
-
-    def __filterImageFirst(self, image):
-        """Returns a filtred image
-
-        Args:
-            image (numpy.ndarray): The input image
-
-        Returns:
-            numpy.ndarray: The filtred image
-        """
-
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 1)
-        thresh = cv2.adaptiveThreshold(
-            blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
-        return thresh
-
-    def __filterImageSecond(self, image):
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        blur = cv2.bilateralFilter(gray, 50, 90, 110)
-        thresh = cv2.adaptiveThreshold(
-            blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 3, 5)
-        kernel = np.ones((5, 4), np.uint8)
-        erosion = cv2.erode(thresh, kernel, iterations=3)
-        edges = cv2.Canny(erosion, 125, 200, 255)
-        return edges
-
-    def __isDigit(self, field):
-        """Checks the field is a digit or not.
-
-        Args:
-            field (numpy.ndarray): The field.
-
-        Returns:
-            boolean: The field is a digit or not.
-        """
-
-        d = pytesseract.image_to_string(field, config=self.tesseractConfig)
-        return (True, int(d[0])) if d[0].isdigit() else (False, None)
