@@ -27,8 +27,12 @@ def get_list_images():
     for directory in os.listdir(current_path):
         dir_path = os.path.join(current_path, directory)
 
-        for image in os.listdir(dir_path):
-            image_path = os.path.join(dir_path, image)
-            list_images.append(os.path.abspath(image_path))
+        if os.path.isdir(dir_path):
+            for image in os.listdir(dir_path):
+                if image == '.DS_Store':
+                    continue
+
+                image_path = os.path.join(dir_path, image)
+                list_images.append(os.path.abspath(image_path))
 
     return list_images

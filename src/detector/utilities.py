@@ -43,27 +43,59 @@ def rotate_image(image, angle):
 
     return imutils.rotate_bound(imageROI, angle), imutils.rotate_bound(maskROI, angle)
 
-def find_local_extremes(graph, dist=5):
-    """Detect all locals extremes on a graph.
+def gaussian_array_blur(array):
+    """Smoothes the edges of an array.
 
     Args:
-        graph ([(x, y)]): Points on the graph.
-        dist (int): The max possible distance between points by x.
+        array ([int, int, ...]): The input array.
 
     Returns:
-        [(x, y)]: All locals extremes on the graph.
+        [int, int, ...]: The smoothed array.
+    """
+
+    for i in np.arange(1, len(array) - 1, 1):
+        array[i] = (array[i - 1] + array[i + 1]) // 2
+    return array
+
+def search_local_extremes(graph):
+    """Searches all local extremes with counting the length of extremes.
+
+    Args:
+        graph ([int, int, ...]): The input graph (array).
+
+    Returns:
+        [(x, y, length), ...]: The array of extremes.
     """
 
     extremes = []
-    x, y = graph[0]
 
-    for i in np.arange(1, len(graph), 1):
-        if graph[i][0] - graph[i - 1][0] <= dist:
-            if y > graph[i][1]:
-                x, y = graph[i]
+    max_height = 0
+    max_x = 0
+    prev_x = 0
+    length = 0
+
+    upper = False
+    downer = False
+
+    for idx, height in enumerate(graph):
+        if height > max_height:
+            max_height = height
+            max_x = idx
+            upper = True
+            length += 1
         else:
-            extremes.append((x, y))
-            x, y = graph[i]
+            if upper:
+                if max_height > 20 and (abs(prev_x - max_x) > 10 or prev_x == 0):
+                    extremes.append((max_x, max_height, length))
+                    prev_x = max_x
 
-    extremes.append((x, y))
+            max_height = 0
+            height = 0
+            upper = False
+            length = 0
+
+    if upper:
+        if max_height > 20 and (abs(prev_x - max_x) > 10 or prev_x == 0):
+            extremes.append((max_x, max_height, length))
+
     return extremes
