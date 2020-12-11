@@ -6,7 +6,7 @@ import config
 from matplotlib import pyplot as plt
 
 from detector import utilities
-from detector.exceptions import *
+from detector.exceptions import SearchingClockFaceError
 
 class ClockFace:
     """This class is used for computing working with a clock face.
@@ -56,7 +56,7 @@ class ClockFace:
 
             return cutImage, (x, y), r
         else:
-            raise ClockFaceSearchingError
+            raise SearchinClockFaceError
 
     def wrap_polar_face(self, image, width=config.WRAP_POLAR_WIDTH,
                        height=config.WRAP_POLAR_HEIGHT):
