@@ -137,9 +137,5 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# Cache data
-/src/cache
-/src/cache/*
-
 # DS_Store
 *.DS_Store
