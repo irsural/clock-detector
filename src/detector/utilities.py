@@ -57,11 +57,13 @@ def gaussian_array_blur(array):
         array[i] = (array[i - 1] + array[i + 1]) // 2
     return array
 
-def search_local_extremes(graph):
+def search_local_extremes(graph, min_height=20, min_dist=10):
     """Searches all local extremes with counting the length of extremes.
 
     Args:
         graph ([int, int, ...]): The input graph (array).
+        min_height (int): The minimal extreme's height.
+        min_dist (int): The minimal distance between extremes for that they can be considered extremes.
 
     Returns:
         [(x, y, length), ...]: The array of extremes.
@@ -85,9 +87,16 @@ def search_local_extremes(graph):
             length += 1
         else:
             if upper:
-                if max_height > 20 and (abs(prev_x - max_x) > 10 or prev_x == 0):
+                if max_height > min_height and (abs(prev_x - max_x) > min_dist or prev_x == 0):
                     extremes.append((max_x, max_height, length))
                     prev_x = max_x
+                # TODO: Should I use below code? 
+                # elif max_height > min_height and abs(prev_x - max_x) <= min_dist and prev_x != 0:
+                #     x, h, l = extremes[len(extremes) - 1]
+                #     max_x = (max_x + x) // 2
+                #     max_height = (max_height + h) // 2
+                #     length = length + l
+                #     extremes[len(extremes) - 1] = (max_x, max_height, length)
 
             max_height = 0
             height = 0
@@ -95,7 +104,7 @@ def search_local_extremes(graph):
             length = 0
 
     if upper:
-        if max_height > 20 and (abs(prev_x - max_x) > 10 or prev_x == 0):
+        if max_height > min_height and (abs(prev_x - max_x) > min_dist or prev_x == 0):
             extremes.append((max_x, max_height, length))
 
     return extremes

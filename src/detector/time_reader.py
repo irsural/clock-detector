@@ -1,20 +1,13 @@
 import cv2
 import config
 import numpy as np
-import config
 import math
-import sys
-import copy
 
 from collections import Counter
-from scipy.signal import argrelextrema
 
 from detector import clock_face as cf
 from detector import utilities
 from detector.exceptions import SearchingHandsError
-
-if __debug__:
-    from matplotlib import pyplot as plt
 
 
 class TimeReader:
@@ -25,19 +18,27 @@ class TimeReader:
         self.image = image
 
     def read_timer(self):
-        filtred_image = self.prepare_image(self.image, is_clock=False)
+        filtred_image, s_filtred_image = self.prepare_image(
+            self.image, is_clock=False)
 
-        graph = self.convert_image_to_graph(filtred_image)
+        graph = TimeReader.convert_image_to_graph(filtred_image)
         graph = utilities.gaussian_array_blur(graph)
+        s_graph = TimeReader.convert_image_to_graph(s_filtred_image)
+        s_graph = utilities.gaussian_array_blur(s_graph)
 
         extremes = utilities.search_local_extremes(graph)
         extremes = sorted(extremes, key=lambda point: point[1], reverse=True)
+        s_extremes = utilities.search_local_extremes(s_graph, min_dist=25, min_height=25)
+        s_extremes = sorted(s_extremes, key=lambda point: point[1], reverse=True)
 
         seconds = config.DEGREE / 60
+        s_seconds = config.DEGREE / 30
 
         if len(extremes) > 1:
             s = extremes[0][0]
-            return int(s / seconds)
+            s_s = s_extremes[0][0]
+
+            return int(s / seconds), int(s_s / s_seconds)
         else:
             raise SearchingHandsError
 
@@ -61,7 +62,8 @@ class TimeReader:
                 extremes = e
 
         if len(extremes) == 3:
-            extremes = sorted(extremes, key=lambda point: point[2], reverse=False)
+            extremes = sorted(
+                extremes, key=lambda point: point[2], reverse=False)
 
             s = extremes[0][0]
             m = extremes[1][0]
@@ -91,7 +93,8 @@ class TimeReader:
         # Adding constants to account for the error.
         return int(((h - 5) / hours) + 0.3), int((m - 5) / minutes + 0.3), math.ceil((s - 5) / minutes)
 
-    def convert_image_to_graph(self, image):
+    @staticmethod
+    def convert_image_to_graph(image):
         """Builds a graphic by an image.
         The graphic shows count of pixels > 0 in grayscale.
 
@@ -128,14 +131,13 @@ class TimeReader:
             numpy.ndarray: The prepared image.
         """
 
-        self.face = cf.ClockFace(image, is_clock)
-        cut_image, centre, radius = self.face.seach_clock_face()
+        min_radius = config.MIN_RADIUS_CLOCK if is_clock else config.MIN_RADIUS_TIMER
+        max_radius = config.MAX_RADIUS_CLOCK if is_clock else config.MAX_RADIUS_TIMER
 
-        if __debug__:
-            plt.imshow(cut_image)
-            plt.show()
-
-        rotated = self.face.wrap_polar_face(cut_image)
+        face = cf.ClockFace(image, min_radius=min_radius,
+                            max_radius=max_radius)
+        cut_image, centre, radius = face.search_clock_face()
+        rotated = cf.ClockFace.wrap_polar_face(cut_image)
         gray = cv2.cvtColor(rotated, cv2.COLOR_RGB2GRAY)
 
         if is_clock:
@@ -144,12 +146,24 @@ class TimeReader:
 
             blur = cv2.medianBlur(erosion, 3)
             _, thresh = cv2.threshold(blur, 125, 255, cv2.THRESH_BINARY)
+
+            return thresh
         else:
+            # filter the main part
             blur = cv2.medianBlur(gray, 7)
             _, thresh = cv2.threshold(blur, 125, 255, cv2.THRESH_BINARY_INV)
 
-            if __debug__:
-                plt.imshow(thresh, cmap='gray', vmin=0, vmax=255)
-                plt.show()
+            # filter the additional (smaller) part
+            s_face = cf.ClockFace(cut_image,
+                                  min_radius=config.MIN_RADIUS_SMALL_TIMER,
+                                  max_radius=config.MAX_RADIUS_SMALL_TIMER,
+                                  blurring=3)
+            s_cut_image, centre, radius = s_face.search_clock_face()
+            s_rotated = cf.ClockFace.wrap_polar_face(
+                s_cut_image, error_height=30)
+            s_gray = cv2.cvtColor(s_rotated, cv2.COLOR_RGB2GRAY)
+            s_blur = cv2.medianBlur(s_gray, 13)
+            _, s_thresh = cv2.threshold(
+                s_blur, 125, 255, cv2.THRESH_BINARY_INV)
 
-        return thresh
+            return thresh, s_thresh

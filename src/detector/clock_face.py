@@ -8,17 +8,21 @@ from matplotlib import pyplot as plt
 from detector import utilities
 from detector.exceptions import SearchingClockFaceError
 
+
 class ClockFace:
     """This class is used for computing working with a clock face.
     """
 
-    def __init__(self, image=None, is_clock=True):
+    def __init__(self, image, min_radius, max_radius,
+                 blurring=config.CLOCK_FACE_DEFAULT_BLURRING):
         self.image = image
-        self.is_clock = is_clock
+        self.min_radius = min_radius
+        self.max_radius = max_radius
         self.center = None
         self.radius = None
+        self.blurring = blurring
 
-    def seach_clock_face(self):
+    def search_clock_face(self):
         """Searches a clock face in an image.
 
         Raises:
@@ -32,7 +36,7 @@ class ClockFace:
         """
 
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.medianBlur(gray, 25)
+        blurred = cv2.medianBlur(gray, self.blurring)
 
         circles = cv2.HoughCircles(
             blurred,
@@ -41,8 +45,8 @@ class ClockFace:
             config.CLOCK_FACE_MIN_DIST,
             param1=config.CLOCK_FACE_PARAM_1,
             param2=config.CLOCK_FACE_PARAM_2,
-            minRadius=config.CLOCK_FACE_MIN_RADIUS_CLOCK if self.is_clock else config.CLOCK_FACE_MIN_RADIUS_TIMER,
-            maxRadius=config.CLOCK_FACE_MAX_RADIUS_CLOCK if self.is_clock else config.CLOCK_FACE_MAX_RADIUS_TIMER
+            minRadius=self.min_radius,
+            maxRadius=self.max_radius
         )
 
         if circles is not None:
@@ -52,20 +56,24 @@ class ClockFace:
             self.center = (x, y)
             self.radius = r
 
-            cutImage = self.cut_image(self.image.copy(), (x, y), r)
+            cutImage = ClockFace.cut_image(self.image.copy(), (x, y), r)
 
             return cutImage, (x, y), r
         else:
-            raise SearchinClockFaceError
+            raise SearchingClockFaceError
 
-    def wrap_polar_face(self, image, width=config.WRAP_POLAR_WIDTH,
-                       height=config.WRAP_POLAR_HEIGHT):
+    @staticmethod
+    def wrap_polar_face(image,
+                        width=config.DEFAULT_WRAP_POLAR_WIDTH,
+                        height=config.DEFAULT_WRAP_POLAR_HEIGHT,
+                        error_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):
         """Wraps the clock face up.
 
         Args:
             image (numpy.ndarray): The clock face image.
             width (int, optional): The width of the final image. Defaults to config.WRAP_POLAR_WIDTH.
             height (int, optional): The height of the final image. Defaults to config.WRAP_POLAR_HEIGHT.
+            error_height (int, optional): The error of the height. Defaults to config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR
 
         Returns:
             numpy.narray: The final wrapped image.
@@ -77,12 +85,13 @@ class ClockFace:
         polarImage = cv2.warpPolar(rotate, (height, width), (centre, centre), centre,
                                    cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
 
-        cropImage = copy.deepcopy(polarImage[0:width, 25:height])
+        cropImage = copy.deepcopy(polarImage[0:width, error_height:height])
         cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         return cropImage
 
-    def cut_image(self, image, point, radius):
+    @staticmethod
+    def cut_image(image, point, radius):
         """Cuts an image by a clock face.
 
         Args:
