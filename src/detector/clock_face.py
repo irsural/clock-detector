@@ -8,19 +8,24 @@ from matplotlib import pyplot as plt
 from detector import utilities
 from detector.exceptions import SearchingClockFaceError
 
+if __debug__:
+    from matplotlib import pyplot as plt
+
 
 class ClockFace:
     """This class is used for computing working with a clock face.
     """
 
     def __init__(self, image, min_radius, max_radius,
-                 blurring=config.CLOCK_FACE_DEFAULT_BLURRING):
+                 blurring=config.CLOCK_FACE_DEFAULT_BLURRING,
+                 by_canny=False):
         self.image = image
         self.min_radius = min_radius
         self.max_radius = max_radius
         self.center = None
         self.radius = None
         self.blurring = blurring
+        self.by_canny = by_canny
 
     def search_clock_face(self):
         """Searches a clock face in an image.
@@ -38,16 +43,32 @@ class ClockFace:
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
         blurred = cv2.medianBlur(gray, self.blurring)
 
-        circles = cv2.HoughCircles(
-            blurred,
-            cv2.HOUGH_GRADIENT,
-            1,
-            config.CLOCK_FACE_MIN_DIST,
-            param1=config.CLOCK_FACE_PARAM_1,
-            param2=config.CLOCK_FACE_PARAM_2,
-            minRadius=self.min_radius,
-            maxRadius=self.max_radius
-        )
+        if not self.by_canny:
+            circles = cv2.HoughCircles(
+                blurred,
+                cv2.HOUGH_GRADIENT,
+                1,
+                config.CLOCK_MIN_DIST,
+                param1=config.CLOCK_PARAM_1,
+                param2=config.CLOCK_PARAM_2,
+                minRadius=self.min_radius,
+                maxRadius=self.max_radius
+            )
+        else:
+            kernel = np.ones((3, 3), np.uint8)
+            erosion = cv2.erode(blurred, kernel, iterations=1)
+            canny = cv2.Canny(erosion, 100, 200)
+
+            circles = cv2.HoughCircles(
+                canny,
+                cv2.HOUGH_GRADIENT,
+                2,
+                config.TIMER_MIN_DIST,
+                param1=config.CLOCK_PARAM_1,
+                param2=config.CLOCK_PARAM_2,
+                minRadius=self.min_radius,
+                maxRadius=self.max_radius
+            )
 
         if circles is not None:
             circles = np.uint16(np.around(circles))
