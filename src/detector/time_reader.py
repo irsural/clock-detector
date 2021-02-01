@@ -1,100 +1,199 @@
 import cv2
 import config
 import numpy as np
-import math
-
-from collections import Counter
 
 from detector import clock_face as cf
 from detector import utilities
-from detector.exceptions import SearchingHandsError
-
-if __debug__:
-    from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 
 class TimeReader:
     """This class is used for reading time by an image of analog clock.
     """
+    def __init__(self, path_templates='../resources/'):
+        self.clock_templates = [
+            utilities.read_transparent_png(path_templates+'clock/face.png'),
+            utilities.read_transparent_png(path_templates+'clock/second.png'),
+        ]
+        
+        self.timer_templates = [
+            utilities.read_transparent_png(path_templates+'timer/face.png'),
+            utilities.read_transparent_png(path_templates+'timer/hand.png'),
+            utilities.read_transparent_png(path_templates+'timer/small_face.png'),
+            utilities.read_transparent_png(path_templates+'timer/small_hand.png'),
+        ]
+    
+    def get_time_on_timer(self, im):
+        rotated = TimeReader.get_rotated(im, self.timer_templates[0])        
+        
+        s_rotated = utilities.find_template(rotated[0], self.timer_templates[2])
+        s_rotated = cf.ClockFace.wrap_polar_face(s_rotated, width=360, error_height=30)
+        s_part = np.copy(s_rotated[0:s_rotated.shape[0], 0:15])
+        s_rotated = np.concatenate((s_rotated, s_part), axis=1)
+        
+        rotated = rotated[1]
+        part = np.copy(rotated[0:rotated.shape[0], 0:15])
+        rotated = np.concatenate((rotated, part), axis=1)
+        
+        g_hand = utilities.get_correlation_graph(self.timer_templates[1], rotated)
+        g_s_hand = utilities.get_correlation_graph(self.timer_templates[3], s_rotated)
+    
+        pos_hand = g_hand.index(max(g_hand))
+        pos_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
+        
+        # TODO: Set relative values
+        if config.DEFAULT_WRAP_POLAR_WIDTH - 30 <= pos_hand <= config.DEFAULT_WRAP_POLAR_WIDTH:
+            for i in range(int(config.DEFAULT_WRAP_POLAR_WIDTH // 2.4), int(config.DEFAULT_WRAP_POLAR_WIDTH // 1.8), 1):
+                if g_hand[i] >= 0.35:
+                    pos_hand = i
+                    break
 
-    def __init__(self, image):
-        self.image = image
+        pos_s_hand = g_s_hand.index(max(g_s_hand))
+        pos_s_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
+        
+        pos_hand += self.timer_templates[1].shape[1]
+        pos_s_hand += self.timer_templates[3].shape[1]
+    
+        if (pos_s_hand * 30 // config.DEFAULT_WRAP_POLAR_WIDTH) in [14, 15] and \
+            (pos_hand * 60 // config.DEFAULT_WRAP_POLAR_WIDTH) == 60:
+            pos_s_hand = 0
+    
+        s = pos_hand * 60 / config.DEFAULT_WRAP_POLAR_WIDTH
+        m = pos_s_hand * 30 // 360
+    
+        return (int(m), s)
+    
+    def get_time_on_clock(self, im):
+        _, rotated = TimeReader.get_rotated(im, self.clock_templates[0])
+        part = np.copy(rotated[0:rotated.shape[0], 0:15])
+        rotated = np.concatenate((rotated, part), axis=1)
+        
+        # Find second
+        ######################################
+        g_second = utilities.get_correlation_graph(self.clock_templates[1], rotated)
+        utilities.blur_graph(g_second)
+    
+#         s_max = max(g_second)
+#         s_min = min(g_second)
+    
+#         if abs(s_max) > abs(s_min):
+#             s = g_second.index(s_max)
+#         else:
+#             s = g_second.index(s_min)
 
-    def read_timer(self):
-        filtred_image, s_filtred_image = self.prepare_image(
-            self.image, is_clock=False, blurring=11)
+#         s += self.clock_templates[1].shape[1] / 2
+        s = g_second.index(min(g_second)) + self.clock_templates[1].shape[1] / 2    
+        s %= 360
+        
+        # Find hour & minute
+        ######################################
+        rotated = rotated[0:rotated.shape[0]-10, 0:rotated.shape[1]]
+        filtred_im = self.filter_image_(rotated)
+        
+        graph = TimeReader.convert_image_to_graph(filtred_im)
+        
+        # Refund for inverting the reverse side of the second hand
+        dis = s + 176
+        summer = 1
+        for i in range(len(graph)):
+            i %= 360
+            
+            if (dis - 15) % 360 <= i <= (dis + 15) % 360:
+                if graph[i] > 2:
+                    graph[i] += summer
 
-        graph = TimeReader.convert_image_to_graph(filtred_image)
-        graph = utilities.gaussian_array_blur(graph)
-        s_graph = TimeReader.convert_image_to_graph(s_filtred_image)
-        s_graph = utilities.gaussian_array_blur(s_graph)
+                if i <= (dis % 360):
+                    summer += 1
+                else:
+                    summer -= 1
 
-        extremes = utilities.search_local_extremes(graph, min_dist=10, min_height=40)
-        extremes = sorted(extremes, key=lambda point: point[1], reverse=True)
-        s_extremes = utilities.search_local_extremes(s_graph, min_dist=25, min_height=40)
-        s_extremes = sorted(s_extremes, key=lambda point: point[2], reverse=False)
-
-        seconds = config.DEGREE / 60
-        s_seconds = config.DEGREE / 30
-
-        if len(extremes) >= 1:
-            s = extremes[0][0]
-            s_s = s_extremes[0][0]
-
-            return int(s_s / s_seconds), s / seconds
+        utilities.blur_graph(graph)
+        
+        kp = [(x, y) for x, y in enumerate(graph) if y > 12]
+        
+        groups = self.sum_groups_value_(self.group_points_(kp))
+        filtred_groups = self.remove_useless_groups_(groups)
+        
+        m = max(filtred_groups, key=lambda p: p[1])[0]
+        if len(filtred_groups) >= 2:
+            h = min(filtred_groups, key=lambda p: p[1])[0]
         else:
-            raise SearchingHandsError
+            h = m
 
-    def read_clock(self):
-        filtred_image = self.prepare_image(self.image, is_clock=True)
-
-        graph = self.convert_image_to_graph(filtred_image)
-        graph = utilities.gaussian_array_blur(graph)
-
-        extremes = utilities.search_local_extremes(graph)
-
-        hours = config.DEGREE / 12
-        minutes = config.DEGREE / 60
-
-        if len(extremes) >= 3 or len(extremes) == 2:
-            e = sorted(extremes, key=lambda point: point[1], reverse=True)
-
-            if len(extremes) >= 3:
-                extremes = [e[0], e[1], e[2]]
+        h = (h * 12) // config.DEFAULT_WRAP_POLAR_WIDTH
+        m = (m * 60) // config.DEFAULT_WRAP_POLAR_WIDTH
+        s = (s * 60) // config.DEFAULT_WRAP_POLAR_WIDTH
+        
+        return (int(h), round(m), round(s))
+    
+    def remove_useless_groups_(self, graph):
+        n = []
+        for x, y, l in graph:
+            if y < 40:
+                n.append((x, y, l))
             else:
-                extremes = e
+                add = True
+                for i in range(len(n)):
+                    _x, _y, _l = n[i]
 
-        if len(extremes) == 3:
-            extremes = sorted(
-                extremes, key=lambda point: point[2], reverse=False)
+                    if _y >= 40:
+                        if y > _y:
+                            n[i] = (x, y, l)
+                        add = False
+                        break
 
-            s = extremes[0][0]
-            m = extremes[1][0]
-            h = extremes[2][0]
-        elif len(extremes) == 2:
-            s = extremes[0][0]
+                if add:
+                    n.append((x, y, l))
+        return n
+    
+    def sum_groups_value_(self, groups):
+        result = []
 
-            # 1
-            if extremes[0][2] > extremes[1][2] * 0.8:
-                m = s
-                h = extremes[1][0]
-            # 2
-            elif extremes[0][2] * 1.3 < extremes[1][2]:
-                m = extremes[1][0]
-                h = m
-            # 3
+        for group in groups:
+            max_x = 0
+            max_y = 0
+
+            for x, y in group[0]:
+                if y > max_y:
+                    max_y = y
+                    max_x = x
+
+            result.append((max_x, max_y, len(group[0])))
+
+        return result
+    
+    def group_points_(self, points):
+        group_points = []
+        group = [points[0]]
+        prev_x = points[0][0]
+        length = 1
+
+        for i in range(1, len(points), 1):
+            if (points[i][0] - 3 > prev_x):
+                group_points.append((group.copy(), length))
+                length = 1
+                group.clear()
+                group = [points[i]]
             else:
-                h = s
-                m = extremes[1][0]
-        elif len(extremes) == 0:
-            s = extremes[0][0]
-            m = s
-            h = s
-        else:
-            raise SearchingHandsError
+                length += 1
+                group.append(points[i])
 
-        # Adding constants to account for the error.
-        return int(((h - 5) / hours) + 0.3), int((m - 5) / minutes + 0.3), math.ceil((s - 5) / minutes)
+            prev_x = points[i][0]
 
+        group_points.append((group.copy(), length))
+
+        return group_points
+    
+    def filter_image_(self, im):
+        gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        kernel = (5, 5)
+        erosion = cv2.erode(gray, kernel, iterations=4)
+        blur = cv2.GaussianBlur(erosion, (7, 7), 4)
+        
+        _, mask = cv2.threshold(blur, thresh=175, maxval=255, type=cv2.THRESH_BINARY)
+        im_thresh_gray = cv2.bitwise_and(blur, mask)
+        
+        return im_thresh_gray
+    
     @staticmethod
     def convert_image_to_graph(image):
         """Builds a graphic by an image.
@@ -108,7 +207,6 @@ class TimeReader:
         """
 
         graph = []
-        array = []
 
         height, width = image.shape[:2]
 
@@ -122,66 +220,8 @@ class TimeReader:
 
         return graph
 
-    def prepare_image(self, image, is_clock, blurring=config.CLOCK_FACE_DEFAULT_BLURRING):
-        """Prepares an image by the future reading the time.
-
-        Args:
-            image (numpy.ndarray): The input image.
-            is_clock (bool, optional): Defines there is a analog clock of a timer in the image.
-
-        Returns:
-            numpy.ndarray: The prepared image.
-        """
-
-        min_radius = config.MIN_RADIUS_CLOCK if is_clock else config.MIN_RADIUS_TIMER
-        max_radius = config.MAX_RADIUS_CLOCK if is_clock else config.MAX_RADIUS_TIMER
-
-        face = cf.ClockFace(image, min_radius=min_radius,
-                            max_radius=max_radius, blurring=blurring)
-        cut_image, centre, radius = face.search_clock_face()
-        rotated = cf.ClockFace.wrap_polar_face(cut_image)
-        gray = cv2.cvtColor(rotated, cv2.COLOR_RGB2GRAY)
-
-        if is_clock:
-            kernel = np.ones((3, 1), np.uint8)
-            erosion = cv2.erode(gray, kernel, iterations=4)
-
-            blur = cv2.medianBlur(erosion, 3)
-            _, thresh = cv2.threshold(blur, 125, 255, cv2.THRESH_BINARY)
-
-            return thresh
-        else:
-            # filter the main part
-            blur = cv2.medianBlur(gray, 1)
-            _, thresh = cv2.threshold(blur, 125, 255, cv2.THRESH_BINARY_INV)
-
-            if __debug__:
-                cv2.imshow('rotated', rotated)
-
-            # filter the additional (smaller) part
-            s_face = cf.ClockFace(cut_image,
-                                  min_radius=config.SMALL_TIMER_MIN_RADIUS,
-                                  max_radius=config.SMALL_TIMER_MAX_RADIUS,
-                                  blurring=1,
-                                  by_canny=True)
-            s_cut_image, centre, radius = s_face.search_clock_face()
-
-            # if __debug__:
-            #     plt.imshow(s_cut_image)
-            #     plt.show()
-
-            s_rotated = cf.ClockFace.wrap_polar_face(
-                s_cut_image, error_height=30)
-            s_gray = cv2.cvtColor(s_rotated, cv2.COLOR_RGB2GRAY)
-            s_blur = cv2.medianBlur(s_gray, 13)
-            _, s_thresh = cv2.threshold(
-                s_blur, 125, 255, cv2.THRESH_BINARY_INV)
-
-            # if __debug__:
-            #     plt.imshow(s_rotated)
-            #     plt.show()
-
-            #     plt.imshow(s_thresh)
-            #     plt.show()
-
-            return thresh, s_thresh
+    @staticmethod
+    def get_rotated(image, template, err_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):
+        cut_image, _ = cf.ClockFace.search_face(image, template)
+        rotated = cf.ClockFace.wrap_polar_face(cut_image, error_height=err_height)
+        return cut_image, rotated

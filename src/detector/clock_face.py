@@ -3,85 +3,55 @@ import cv2
 import numpy as np
 import config
 
-from matplotlib import pyplot as plt
-
-from detector import utilities
-from detector.exceptions import SearchingClockFaceError
-
-if __debug__:
-    from matplotlib import pyplot as plt
-
-
 class ClockFace:
     """This class is used for computing working with a clock face.
     """
 
-    def __init__(self, image, min_radius, max_radius,
-                 blurring=config.CLOCK_FACE_DEFAULT_BLURRING,
-                 by_canny=False):
-        self.image = image
-        self.min_radius = min_radius
-        self.max_radius = max_radius
-        self.center = None
-        self.radius = None
-        self.blurring = blurring
-        self.by_canny = by_canny
+    @staticmethod
+    def search_face(im1, im2):
+        MAX_FEATURES = 500
+        GOOD_MATCH_PERCENT = 0.15
 
-    def search_clock_face(self):
-        """Searches a clock face in an image.
+        # Convert images to grayscale
+        im1Gray = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+        im2Gray = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
 
-        Raises:
-            ClockFaceSearchingError: Raise if a clock face was not found.
+        # Detect ORB features and compute descriptors.
+        orb = cv2.ORB_create(MAX_FEATURES)
+        keypoints1, descriptors1 = orb.detectAndCompute(im1Gray, None)
+        keypoints2, descriptors2 = orb.detectAndCompute(im2Gray, None)
 
-        Returns:
-            turple(cut_image, (x, y), r):
-                cut_image is an image that cut by the circle's boards.
-                (x, y) - the central point of the clock face.
-                r - the radius of the clock face.
-        """
+        # Match features.
+        matcher = cv2.DescriptorMatcher_create(cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
+        matches = matcher.match(descriptors1, descriptors2, None)
 
-        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.medianBlur(gray, self.blurring)
+        # Sort matches by score
+        matches.sort(key=lambda x: x.distance, reverse=False)
 
-        if not self.by_canny:
-            circles = cv2.HoughCircles(
-                blurred,
-                cv2.HOUGH_GRADIENT,
-                1,
-                config.CLOCK_MIN_DIST,
-                param1=config.CLOCK_PARAM_1,
-                param2=config.CLOCK_PARAM_2,
-                minRadius=self.min_radius,
-                maxRadius=self.max_radius
-            )
-        else:
-            kernel = np.ones((3, 3), np.uint8)
-            erosion = cv2.erode(blurred, kernel, iterations=1)
-            canny = cv2.Canny(erosion, 100, 200)
+        # Remove not so good matches
+        numGoodMatches = int(len(matches) * GOOD_MATCH_PERCENT)
+        matches = matches[:numGoodMatches]
 
-            circles = cv2.HoughCircles(
-                canny,
-                cv2.HOUGH_GRADIENT,
-                2,
-                config.TIMER_MIN_DIST,
-                param1=config.CLOCK_PARAM_1,
-                param2=config.CLOCK_PARAM_2,
-                minRadius=self.min_radius,
-                maxRadius=self.max_radius
-            )
+        # Draw top matches
+        imMatches = cv2.drawMatches(im1, keypoints1, im2, keypoints2, matches, None)
+#         plt.imshow(imMatches), plt.show()
 
-        if circles is not None:
-            circles = np.uint16(np.around(circles))
-            x, y, r = circles[0][0]
+        # Extract location of good matches
+        points1 = np.zeros((len(matches), 2), dtype=np.float32)
+        points2 = np.zeros((len(matches), 2), dtype=np.float32)
 
-            self.center = (x, y)
-            self.radius = r
+        for i, match in enumerate(matches):
+            points1[i, :] = keypoints1[match.queryIdx].pt
+            points2[i, :] = keypoints2[match.trainIdx].pt
 
-            cutImage = ClockFace.cut_image(self.image.copy(), (x, y), r)
+        # Find homography
+        h, mask = cv2.findHomography(points1, points2, cv2.RANSAC)
 
-            return cutImage, (x, y), r
-        else:
-            raise SearchingClockFaceError
+        # Use homography
+        height, width, channels = im2.shape
+        im1Reg = cv2.warpPerspective(im1, h, (width, height))
+
+        return im1Reg, h
 
     @staticmethod
     def wrap_polar_face(image,
