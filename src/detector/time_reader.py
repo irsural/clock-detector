@@ -6,6 +6,10 @@ from detector import clock_face as cf
 from detector import utilities
 from matplotlib import pyplot as plt
 
+from icecream import ic
+
+# 8 марта 181/4
+
 class TimeReader:
     """This class is used for reading time by an image of analog clock.
     """
@@ -14,31 +18,36 @@ class TimeReader:
             utilities.read_transparent_png(path_templates+'clock/face.png'),
             utilities.read_transparent_png(path_templates+'clock/second.png'),
         ]
-        
+
         self.timer_templates = [
             utilities.read_transparent_png(path_templates+'timer/face.png'),
             utilities.read_transparent_png(path_templates+'timer/hand.png'),
             utilities.read_transparent_png(path_templates+'timer/small_face.png'),
             utilities.read_transparent_png(path_templates+'timer/small_hand.png'),
         ]
-    
+
     def get_time_on_timer(self, im):
-        rotated = TimeReader.get_rotated(im, self.timer_templates[0])        
-        
+        def get_head_of_hand(im):
+            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            g = TimeReader.convert_image_to_graph(im)
+            return g.index(min(g))
+
+        rotated = TimeReader.get_rotated(im, self.timer_templates[0])
+
         s_rotated = utilities.find_template(rotated[0], self.timer_templates[2])
         s_rotated = cf.ClockFace.wrap_polar_face(s_rotated, width=360, error_height=30)
         s_part = np.copy(s_rotated[0:s_rotated.shape[0], 0:15])
         s_rotated = np.concatenate((s_rotated, s_part), axis=1)
-        
+
         rotated = rotated[1]
         part = np.copy(rotated[0:rotated.shape[0], 0:15])
         rotated = np.concatenate((rotated, part), axis=1)
-        
+
         g_hand = utilities.get_correlation_graph(self.timer_templates[1], rotated)
         g_s_hand = utilities.get_correlation_graph(self.timer_templates[3], s_rotated)
-    
+
         pos_hand = g_hand.index(max(g_hand))
-        
+
         # TODO: Set relative values
         if config.DEFAULT_WRAP_POLAR_WIDTH - config.DEFAULT_WRAP_POLAR_WIDTH*0.83 <= pos_hand <= config.DEFAULT_WRAP_POLAR_WIDTH:
             max_pos_hand = 0
@@ -48,8 +57,11 @@ class TimeReader:
                         max_pos_hand = i
 
         pos_s_hand = g_s_hand.index(max(g_s_hand))
-        pos_hand += temp_hand.shape[1]
-        pos_s_hand += temp_s_hand.shape[1]
+#         pos_hand += get_head_of_hand(self.timer_templates[1])
+#         pos_s_hand += get_head_of_hand(self.timer_templates[3])
+
+        pos_hand += self.timer_templates[1].shape[1] / 1.5
+        pos_s_hand += self.timer_templates[3].shape[1] / 1.5
 
         pos_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
         pos_s_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
@@ -60,44 +72,47 @@ class TimeReader:
 
         s = pos_hand * 60 / config.DEFAULT_WRAP_POLAR_WIDTH
         m = pos_s_hand * 30 // 360
-    
+
+        ic(pos_hand)
+        ic(pos_s_hand)
+
         return (int(m), s)
-    
+
     def get_time_on_clock(self, im):
         _, rotated = TimeReader.get_rotated(im, self.clock_templates[0])
         part = np.copy(rotated[0:rotated.shape[0], 0:15])
         rotated = np.concatenate((rotated, part), axis=1)
-        
+
         # Find second
         ######################################
         g_second = utilities.get_correlation_graph(self.clock_templates[1], rotated)
         utilities.blur_graph(g_second)
-    
+
 #         s_max = max(g_second)
 #         s_min = min(g_second)
-    
+
 #         if abs(s_max) > abs(s_min):
 #             s = g_second.index(s_max)
 #         else:
 #             s = g_second.index(s_min)
 
 #         s += self.clock_templates[1].shape[1] / 2
-        s = g_second.index(min(g_second)) + self.clock_templates[1].shape[1] / 2    
+        s = g_second.index(min(g_second)) + self.clock_templates[1].shape[1] / 2
         s %= 360
-        
+
         # Find hour & minute
         ######################################
         rotated = rotated[0:rotated.shape[0]-10, 0:rotated.shape[1]]
         filtred_im = self.filter_image_(rotated)
-        
+
         graph = TimeReader.convert_image_to_graph(filtred_im)
-        
+
         # Refund for inverting the reverse side of the second hand
         dis = s + 176
         summer = 1
         for i in range(len(graph)):
             i %= 360
-            
+
             if (dis - 15) % 360 <= i <= (dis + 15) % 360:
                 if graph[i] > 2:
                     graph[i] += summer
@@ -108,12 +123,12 @@ class TimeReader:
                     summer -= 1
 
         utilities.blur_graph(graph)
-        
+
         kp = [(x, y) for x, y in enumerate(graph) if y > 12]
-        
+
         groups = self.sum_groups_value_(self.group_points_(kp))
         filtred_groups = self.remove_useless_groups_(groups)
-        
+
         m = max(filtred_groups, key=lambda p: p[1])[0]
         if len(filtred_groups) >= 2:
             h = min(filtred_groups, key=lambda p: p[1])[0]
@@ -123,9 +138,9 @@ class TimeReader:
         h = (h * 12) // config.DEFAULT_WRAP_POLAR_WIDTH
         m = (m * 60) // config.DEFAULT_WRAP_POLAR_WIDTH
         s = (s * 60) // config.DEFAULT_WRAP_POLAR_WIDTH
-        
+
         return (int(h), round(m), round(s))
-    
+
     def remove_useless_groups_(self, graph):
         n = []
         for x, y, l in graph:
@@ -145,7 +160,7 @@ class TimeReader:
                 if add:
                     n.append((x, y, l))
         return n
-    
+
     def sum_groups_value_(self, groups):
         result = []
 
@@ -161,7 +176,7 @@ class TimeReader:
             result.append((max_x, max_y, len(group[0])))
 
         return result
-    
+
     def group_points_(self, points):
         group_points = []
         group = [points[0]]
@@ -183,18 +198,18 @@ class TimeReader:
         group_points.append((group.copy(), length))
 
         return group_points
-    
+
     def filter_image_(self, im):
         gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         kernel = (5, 5)
         erosion = cv2.erode(gray, kernel, iterations=4)
         blur = cv2.GaussianBlur(erosion, (7, 7), 4)
-        
+
         _, mask = cv2.threshold(blur, thresh=175, maxval=255, type=cv2.THRESH_BINARY)
         im_thresh_gray = cv2.bitwise_and(blur, mask)
-        
+
         return im_thresh_gray
-    
+
     @staticmethod
     def convert_image_to_graph(image):
         """Builds a graphic by an image.
