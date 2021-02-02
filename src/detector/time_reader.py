@@ -38,25 +38,26 @@ class TimeReader:
         g_s_hand = utilities.get_correlation_graph(self.timer_templates[3], s_rotated)
     
         pos_hand = g_hand.index(max(g_hand))
-        pos_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
         
         # TODO: Set relative values
-        if config.DEFAULT_WRAP_POLAR_WIDTH - 30 <= pos_hand <= config.DEFAULT_WRAP_POLAR_WIDTH:
+        if config.DEFAULT_WRAP_POLAR_WIDTH - config.DEFAULT_WRAP_POLAR_WIDTH*0.83 <= pos_hand <= config.DEFAULT_WRAP_POLAR_WIDTH:
+            max_pos_hand = 0
             for i in range(int(config.DEFAULT_WRAP_POLAR_WIDTH // 2.4), int(config.DEFAULT_WRAP_POLAR_WIDTH // 1.8), 1):
-                if g_hand[i] >= 0.35:
-                    pos_hand = i
-                    break
+                    if g_hand[i] >= 0.35 and g_hand[i] >= max_pos_hand:
+                        pos_hand = i
+                        max_pos_hand = i
 
         pos_s_hand = g_s_hand.index(max(g_s_hand))
+        pos_hand += temp_hand.shape[1]
+        pos_s_hand += temp_s_hand.shape[1]
+
+        pos_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
         pos_s_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
-        
-        pos_hand += self.timer_templates[1].shape[1]
-        pos_s_hand += self.timer_templates[3].shape[1]
-    
+
         if (pos_s_hand * 30 // config.DEFAULT_WRAP_POLAR_WIDTH) in [14, 15] and \
             (pos_hand * 60 // config.DEFAULT_WRAP_POLAR_WIDTH) == 60:
             pos_s_hand = 0
-    
+
         s = pos_hand * 60 / config.DEFAULT_WRAP_POLAR_WIDTH
         m = pos_s_hand * 30 // 360
     
