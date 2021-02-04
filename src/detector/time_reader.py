@@ -46,6 +46,8 @@ class TimeReader:
         g_hand = utilities.get_correlation_graph(self.timer_templates[1], rotated)
         g_s_hand = utilities.get_correlation_graph(self.timer_templates[3], s_rotated)
 
+        # plt.plot(g_s_hand), plt.show()
+
         pos_hand = g_hand.index(max(g_hand))
 
         # TODO: Set relative values
@@ -57,11 +59,9 @@ class TimeReader:
                         max_pos_hand = i
 
         pos_s_hand = g_s_hand.index(max(g_s_hand))
-#         pos_hand += get_head_of_hand(self.timer_templates[1])
-#         pos_s_hand += get_head_of_hand(self.timer_templates[3])
-
-        pos_hand += self.timer_templates[1].shape[1] / 1.5
-        pos_s_hand += self.timer_templates[3].shape[1] / 1.5
+        # pos_hand += get_head_of_hand(self.timer_templates[1])
+        pos_hand += self.timer_templates[1].shape[1]
+        pos_s_hand += self.timer_templates[3].shape[1]
 
         pos_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
         pos_s_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
@@ -70,11 +70,14 @@ class TimeReader:
             (pos_hand * 60 // config.DEFAULT_WRAP_POLAR_WIDTH) == 60:
             pos_s_hand = 0
 
+        # s = pos_hand * 60 / config.DEFAULT_WRAP_POLAR_WIDTH
+        # val = 0.2 * 1500 / 341
+        # s = pos_hand * val * 60 // config.DEFAULT_WRAP_POLAR_WIDTH
         s = pos_hand * 60 / config.DEFAULT_WRAP_POLAR_WIDTH
         m = pos_s_hand * 30 // 360
 
-        ic(pos_hand)
-        ic(pos_s_hand)
+        # ic(pos_hand)
+        # ic(pos_s_hand)
 
         return (int(m), s)
 
