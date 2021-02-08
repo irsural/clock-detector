@@ -8,8 +8,6 @@ from matplotlib import pyplot as plt
 
 from icecream import ic
 
-# 8 марта 181/4
-
 class TimeReader:
     """This class is used for reading time by an image of analog clock.
     """
@@ -27,11 +25,6 @@ class TimeReader:
         ]
 
     def get_time_on_timer(self, im):
-        def get_head_of_hand(im):
-            im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-            g = TimeReader.convert_image_to_graph(im)
-            return g.index(min(g))
-
         rotated = TimeReader.get_rotated(im, self.timer_templates[0])
 
         s_rotated = utilities.find_template(rotated[0], self.timer_templates[2])
@@ -59,7 +52,6 @@ class TimeReader:
                         max_pos_hand = i
 
         pos_s_hand = g_s_hand.index(max(g_s_hand))
-        # pos_hand += get_head_of_hand(self.timer_templates[1])
         pos_hand += self.timer_templates[1].shape[1]
         pos_s_hand += self.timer_templates[3].shape[1]
 
@@ -70,14 +62,8 @@ class TimeReader:
             (pos_hand * 60 // config.DEFAULT_WRAP_POLAR_WIDTH) == 60:
             pos_s_hand = 0
 
-        # s = pos_hand * 60 / config.DEFAULT_WRAP_POLAR_WIDTH
-        # val = 0.2 * 1500 / 341
-        # s = pos_hand * val * 60 // config.DEFAULT_WRAP_POLAR_WIDTH
         s = pos_hand * 60 / config.DEFAULT_WRAP_POLAR_WIDTH
         m = pos_s_hand * 30 // 360
-
-        # ic(pos_hand)
-        # ic(pos_s_hand)
 
         return (int(m), s)
 
@@ -241,6 +227,6 @@ class TimeReader:
 
     @staticmethod
     def get_rotated(image, template, err_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):
-        cut_image, _ = cf.ClockFace.search_face(image, template)
+        cut_image, _ = cf.ClockFace.search_face(image, template)        
         rotated = cf.ClockFace.wrap_polar_face(cut_image, error_height=err_height)
         return cut_image, rotated
