@@ -8,9 +8,11 @@ from matplotlib import pyplot as plt
 
 from icecream import ic
 
+
 class TimeReader:
     """This class is used for reading time by an image of analog clock.
     """
+
     def __init__(self, path_templates='../resources/'):
         self.clock_templates = [
             utilities.read_transparent_png(path_templates+'clock/face.png'),
@@ -20,15 +22,21 @@ class TimeReader:
         self.timer_templates = [
             utilities.read_transparent_png(path_templates+'timer/face.png'),
             utilities.read_transparent_png(path_templates+'timer/hand.png'),
-            utilities.read_transparent_png(path_templates+'timer/small_face.png'),
-            utilities.read_transparent_png(path_templates+'timer/small_hand.png'),
+            utilities.read_transparent_png(
+                path_templates+'timer/small_face.png'),
+            utilities.read_transparent_png(
+                path_templates+'timer/small_hand.png'),
+            utilities.read_transparent_png(
+                path_templates+'timer/hand_black.png'),
         ]
 
     def get_time_on_timer(self, im):
         rotated = TimeReader.get_rotated(im, self.timer_templates[0])
 
-        s_rotated = utilities.find_template(rotated[0], self.timer_templates[2])
-        s_rotated = cf.ClockFace.wrap_polar_face(s_rotated, width=360, error_height=30)
+        s_rotated = utilities.find_template(
+            rotated[0], self.timer_templates[2])
+        s_rotated = cf.ClockFace.wrap_polar_face(
+            s_rotated, width=360, error_height=30)
         s_part = np.copy(s_rotated[0:s_rotated.shape[0], 0:15])
         s_rotated = np.concatenate((s_rotated, s_part), axis=1)
 
@@ -36,30 +44,30 @@ class TimeReader:
         part = np.copy(rotated[0:rotated.shape[0], 0:15])
         rotated = np.concatenate((rotated, part), axis=1)
 
-        g_hand = utilities.get_correlation_graph(self.timer_templates[1], rotated)
-        g_s_hand = utilities.get_correlation_graph(self.timer_templates[3], s_rotated)
+        g_hand = utilities.get_correlation_graph(
+            self.timer_templates[1], rotated)
+        g_s_hand = utilities.get_correlation_graph(
+            self.timer_templates[4], s_rotated)
 
         # plt.plot(g_s_hand), plt.show()
 
         pos_hand = g_hand.index(max(g_hand))
-
-        # TODO: Set relative values
         if config.DEFAULT_WRAP_POLAR_WIDTH - config.DEFAULT_WRAP_POLAR_WIDTH*0.83 <= pos_hand <= config.DEFAULT_WRAP_POLAR_WIDTH:
             max_pos_hand = 0
             for i in range(int(config.DEFAULT_WRAP_POLAR_WIDTH // 2.4), int(config.DEFAULT_WRAP_POLAR_WIDTH // 1.8), 1):
-                    if g_hand[i] >= 0.35 and g_hand[i] >= max_pos_hand:
-                        pos_hand = i
-                        max_pos_hand = i
+                if g_hand[i] >= 0.35 and g_hand[i] >= max_pos_hand:
+                    pos_hand = i
+                    max_pos_hand = i
 
         pos_s_hand = g_s_hand.index(max(g_s_hand))
-        pos_hand += self.timer_templates[1].shape[1]
-        pos_s_hand += self.timer_templates[3].shape[1]
+        pos_hand += self.timer_templates[1].shape[1] // 2 + 3
+        pos_s_hand += self.timer_templates[3].shape[1] // 2 + 3
 
         pos_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
         pos_s_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
 
-        if (pos_s_hand * 30 // config.DEFAULT_WRAP_POLAR_WIDTH) in [14, 15] and \
-            (pos_hand * 60 // config.DEFAULT_WRAP_POLAR_WIDTH) == 60:
+        if ((pos_s_hand * 30 // 360) in [14, 15] and (pos_hand * 60 // config.DEFAULT_WRAP_POLAR_WIDTH) == 60) or \
+            (0 <= pos_hand * 60 // config.DEFAULT_WRAP_POLAR_WIDTH <= 5 and (pos_s_hand * 30 // 360) == 30):
             pos_s_hand = 0
 
         s = pos_hand * 60 / config.DEFAULT_WRAP_POLAR_WIDTH
@@ -74,19 +82,11 @@ class TimeReader:
 
         # Find second
         ######################################
-        g_second = utilities.get_correlation_graph(self.clock_templates[1], rotated)
+        g_second = utilities.get_correlation_graph(
+            self.clock_templates[1], rotated)
         utilities.blur_graph(g_second)
-
-#         s_max = max(g_second)
-#         s_min = min(g_second)
-
-#         if abs(s_max) > abs(s_min):
-#             s = g_second.index(s_max)
-#         else:
-#             s = g_second.index(s_min)
-
-#         s += self.clock_templates[1].shape[1] / 2
-        s = g_second.index(min(g_second)) + self.clock_templates[1].shape[1] / 2
+        s = g_second.index(min(g_second)) + \
+            self.clock_templates[1].shape[1] / 2
         s %= 360
 
         # Find hour & minute
@@ -194,10 +194,27 @@ class TimeReader:
         erosion = cv2.erode(gray, kernel, iterations=4)
         blur = cv2.GaussianBlur(erosion, (7, 7), 4)
 
-        _, mask = cv2.threshold(blur, thresh=175, maxval=255, type=cv2.THRESH_BINARY)
+        _, mask = cv2.threshold(
+            blur, thresh=175, maxval=255, type=cv2.THRESH_BINARY)
         im_thresh_gray = cv2.bitwise_and(blur, mask)
 
         return im_thresh_gray
+
+    def find_lines(self, im):
+        im, _ = TimeReader.get_rotated(im, self.timer_templates[0])
+        dst = cv2.Canny(im, 200, 200, None, 3)
+
+        cv2.imshow('canny', dst)
+
+        lines = cv2.HoughLinesP(dst, 1, np.pi / 180, 100, None, 50, 10)
+
+        if lines is not None:
+            for i in range(0, len(lines)):
+                l = lines[i][0]
+                cv2.line(im, (l[0], l[1]), (l[2], l[3]),
+                         (0, 0, 255), 1, cv2.LINE_AA)
+
+        return im
 
     @staticmethod
     def convert_image_to_graph(image):
@@ -227,6 +244,7 @@ class TimeReader:
 
     @staticmethod
     def get_rotated(image, template, err_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):
-        cut_image, _ = cf.ClockFace.search_face(image, template)        
-        rotated = cf.ClockFace.wrap_polar_face(cut_image, error_height=err_height)
+        cut_image, _ = cf.ClockFace.search_face(image, template)
+        rotated = cf.ClockFace.wrap_polar_face(
+            cut_image, error_height=err_height)
         return cut_image, rotated

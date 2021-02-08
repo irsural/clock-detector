@@ -3,6 +3,7 @@ import cv2
 import numpy as np
 import config
 
+
 class ClockFace:
     """This class is used for computing working with a clock face.
     """
@@ -22,7 +23,8 @@ class ClockFace:
         keypoints2, descriptors2 = orb.detectAndCompute(im2Gray, None)
 
         # Match features.
-        matcher = cv2.DescriptorMatcher_create(cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
+        matcher = cv2.DescriptorMatcher_create(
+            cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
         matches = matcher.match(descriptors1, descriptors2, None)
 
         # Sort matches by score
@@ -33,7 +35,8 @@ class ClockFace:
         matches = matches[:numGoodMatches]
 
         # Draw top matches
-        imMatches = cv2.drawMatches(im1, keypoints1, im2, keypoints2, matches, None)
+        imMatches = cv2.drawMatches(
+            im1, keypoints1, im2, keypoints2, matches, None)
 #         plt.imshow(imMatches), plt.show()
 
         # Extract location of good matches
@@ -73,8 +76,25 @@ class ClockFace:
         rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
         centre = rotate.shape[0] // 2
 
-        polarImage = cv2.warpPolar(rotate, (height, width), (centre, centre), centre,
-                                   cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
+        # TODO: There is gonna be something to wrap polar a part of image
+        polarImage = cv2.warpPolar(rotate, (height, width), (centre, centre),
+                                   centre, cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
+
+        cropImage = copy.deepcopy(polarImage[0:width, error_height:height])
+        cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        return cropImage
+
+    @staticmethod
+    def wrap_polar_image(image,
+                         width=config.DEFAULT_WRAP_POLAR_WIDTH,
+                         height=config.DEFAULT_WRAP_POLAR_HEIGHT,
+                         error_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):
+        rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        centre = (0, 0)
+
+        polarImage = cv2.warpPolar(rotate, (height, width), centre,
+                                   image.shape[0], cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
 
         cropImage = copy.deepcopy(polarImage[0:width, error_height:height])
         cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)

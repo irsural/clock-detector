@@ -18,6 +18,10 @@ def read_video(is_clock):
         key = cv2.waitKey(1) & 0xFF
 
         if key == ord('e'):
+            # ret, frame = video.read()
+            # reader = tr.TimeReader()
+            # im = reader.find_lines(frame)
+            # cv2.imshow('lines', im)
             minutes = []
             seconds = []
 
@@ -29,8 +33,10 @@ def read_video(is_clock):
                 minutes.append(time[0])
                 seconds.append(time[1])
 
-            print(seconds)
-            print(f'mean: {np.median(minutes)}:{toFixed(np.mean(seconds), 2)}')
+            print('-------------------------')
+            print(f'minutes: {minutes}')
+            print(f'seconds: {seconds}')
+            print(f'time: {np.median(minutes)}:{np.median(seconds)}')
         elif key == ord('q'):
             cv2.destroyAllWindows()
             break

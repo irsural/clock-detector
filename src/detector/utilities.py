@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import imutils
 
+from matplotlib import pyplot as plt
 
 def read_transparent_png(filename):
     image_4channel = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
@@ -36,8 +37,9 @@ def get_correlation_graph(im1, im2):
             im1, (im1.shape[1], im2.shape[0]), interpolation=cv2.INTER_AREA)
 
     while not dx > im2.shape[1]:
-        # WARNING: wtf is 85 constants!?
-        part = np.copy(im2[85 - im2.shape[1]:im2.shape[0], x:dx])
+        # TODO: St relative values for computing height of image
+        # 85 is computed by (100 - 15) <-> (config.DEFAULT_WRAP_POLAR_HEIGHT - config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR)
+        part = np.copy(im2[85 - im2.shape[0]:im2.shape[0], x:dx])
         corr = cv2.matchTemplate(im1, part, cv2.TM_CCOEFF_NORMED)[0][0]
         result.append(corr)
         x += 1
