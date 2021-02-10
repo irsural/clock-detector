@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
 import imutils
+import math
 
 from matplotlib import pyplot as plt
+
 
 def read_transparent_png(filename):
     image_4channel = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
@@ -95,6 +97,7 @@ def rotate_image(im, angle):
         rotated = imutils.rotate_bound(imageROI, angle)
         return rotated
 
+
 def coef_corr(im, template):
     im = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
@@ -103,3 +106,12 @@ def coef_corr(im, template):
     # min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     return res
+
+
+def distance(point1, point2, point):
+    _abs = abs((point2[0]-point1[0])*(point1[1]-point[1])-(point1[0]-point[0])*(point2[1]-point1[1]))
+    _sqrt = math.sqrt(math.pow(point2[0]-point1[0], 2) + math.pow(point2[1]-point2[1], 2))
+    return _abs / _sqrt;
+
+def distance(point1, point2):
+    return math.sqrt(math.pow(point2[0]-point1[0], 2) + math.pow(point2[1]-point1[1], 2))
