@@ -224,8 +224,9 @@ class TimeReader:
         return im
 
     def get_seconds_by_lines(self, im):
-        im, _ = TimeReader.get_rotated(im, self.timer_templates[0])
+        np.warnings.filterwarnings('ignore')
 
+        im, _ = TimeReader.get_rotated(im, self.timer_templates[0])
         x, y, r = im.shape[0] // 2 - 2, im.shape[1] // 2, im.shape[0] // 2
 
         separation = 30.0 #in degrees
@@ -241,22 +242,14 @@ class TimeReader:
                 else:
                     p1[i][j] = y + 0.9 * r * np.sin(separation * i * 3.14 / 180)
 
-        text_offset_x = 10
-        text_offset_y = 5
-
         for i in range(0, interval):
             for j in range(0, 2):
                 if (j % 2 == 0):
                     p2[i][j] = x + r * np.cos(separation * i * 3.14 / 180)
-                    p_text[i][j] = x - text_offset_x + 1.2 * r * np.cos((separation) * (i+9) * 3.14 / 180) #point for text labels, i+9 rotates the labels by 90 degrees
+
                 else:
                     p2[i][j] = y + r * np.sin(separation * i * 3.14 / 180)
-                    p_text[i][j] = y + text_offset_y + 1.2* r * np.sin((separation) * (i+9) * 3.14 / 180)  # point for text labels, i+9 rotates the labels by 90 degrees
 
-        #add the lines and labels to the image
-        for i in range(0,interval):
-            cv2.line(im, (int(p1[i][0]), int(p1[i][1])), (int(p2[i][0]), int(p2[i][1])),(0, 255, 0), 2)
-            cv2.putText(im, '%s' %(int(i*separation)), (int(p_text[i][0]), int(p_text[i][1])), cv2.FONT_HERSHEY_SIMPLEX, 0.3,(0,0,0),1,cv2.LINE_AA)
 
         # Find hand
         gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
@@ -289,6 +282,9 @@ class TimeReader:
         else:
             return None
 
+        if len(final_list) == 0:
+            return None
+
         p_x = final_list[0][0]
         p_y = final_list[0][1]
 
@@ -311,17 +307,114 @@ class TimeReader:
         cv2.line(im, (x, 0), (x, im.shape[0]), (0, 255, 0), 1)
         cv2.line(im, (p_x, p_y), (x, y), (0, 0, 255), 2)
 
+        #add the lines and labels to the image
+        for i in range(0,interval):
+            cv2.line(im, (int(p1[i][0]), int(p1[i][1])), (int(p2[i][0]), int(p2[i][1])),(0, 255, 0), 2)
+
         time = ((res+0.02) * 60) / 360
 
         if __debug__:
             cv2.imshow('f', im)
-            # print(f'({x_angle}, {y_angle}) - {res}')
-            # if x_angle < 0:
-                # cv2.waitKey()
 
         return time
 
-    def get_minutes(self, im):
+    def get_minutes_by_lines(self, im):
+        face, _ = TimeReader.get_rotated(im, self.timer_templates[0])
+        face = utilities.find_template(face, self.timer_templates[2])
+
+        x, y, r = face.shape[0] // 2, face.shape[1] // 2, face.shape[0] // 2
+
+        separation = 10.0 #in degrees
+        interval = int(360 / separation)
+        p1 = np.zeros((interval,2))  #set empty arrays
+        p2 = np.zeros((interval,2))
+        p_text = np.zeros((interval,2))
+
+        for i in range(0,interval):
+            for j in range(0,2):
+                if (j%2==0):
+                    p1[i][j] = x + 0.9 * r * np.cos(separation * i * 3.14 / 180) #point for lines
+                else:
+                    p1[i][j] = y + 0.9 * r * np.sin(separation * i * 3.14 / 180)
+
+        for i in range(0, interval):
+            for j in range(0, 2):
+                if (j % 2 == 0):
+                    p2[i][j] = x + r * np.cos(separation * i * 3.14 / 180)
+                else:
+                    p2[i][j] = y + r * np.sin(separation * i * 3.14 / 180)
+
+        gray = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+
+        thresh = 175
+        maxValue = 255
+
+        th, dst2 = cv2.threshold(gray, thresh, maxValue, cv2.THRESH_BINARY_INV)
+
+        min_line_length = 30
+        max_line_gap = 250
+
+        lines = cv2.HoughLinesP(image=dst2, rho=3, theta=np.pi / 180, threshold=100,minLineLength=min_line_length, maxLineGap=0)
+
+        final_list = []
+
+        if lines is not None:
+            for i in range(len(lines)):
+                for x1, y1, x2, y2 in lines[i]:
+                    diff1 = utilities.distance((x, y), (x1, y1))
+                    diff2 = utilities.distance((x, y), (x2, y2))
+
+                    if max(diff1, diff2) < 30:
+                        continue
+
+                    if min(diff1, diff2) > 10:
+                        continue
+
+                    if (diff1 > diff2):
+                        final_list.append([x1, y1])
+                    else:
+                        final_list.append([x2, y2])
+        else:
+            return None
+
+        if len(final_list) == 0:
+            return None
+
+        p_x = final_list[0][0]
+        p_y = final_list[0][1]
+
+        x_angle = p_x - x
+        y_angle = p_y - y
+
+        res = np.arctan(np.divide(float(y_angle), float(x_angle)))
+        res = np.rad2deg(res)
+
+        if x_angle >= 0 and y_angle < 0:
+            res += 90
+        elif x_angle >= 0 and y_angle >= 0:
+            res += 90
+        elif x_angle < 0 and y_angle > 0:
+            res += 270
+        else:
+            res += 270
+
+        time = ((res+0.02) * 30) / 360
+
+        cv2.line(face, (0, y), (face.shape[1], y), (0, 255, 0), 1)
+        cv2.line(face, (x, 0), (x, face.shape[0]), (0, 255, 0), 1)
+
+        #add the lines and labels to the image
+        for i in range(0,interval):
+            cv2.line(face, (int(p1[i][0]), int(p1[i][1])), (int(p2[i][0]), int(p2[i][1])),(0, 255, 0), 1)
+
+        cv2.line(face, (p_x, p_y), (x, y), (0, 0, 255), 2)
+
+        if __debug__:
+            cv2.imshow('face', face)
+
+        return time
+
+    def get_minutes_by_graph(self, im):
         rotated = TimeReader.get_rotated(im, self.timer_templates[0])
 
         s_rotated = utilities.find_template(
@@ -338,9 +431,9 @@ class TimeReader:
         pos_s_hand += self.timer_templates[3].shape[1] // 2 + 3
         pos_s_hand %= config.DEFAULT_WRAP_POLAR_WIDTH
 
-        result = math.floor(pos_s_hand * 30 / 360)
+        time = math.floor(pos_s_hand * 30 / 360)
 
-        return result
+        return time
 
     @staticmethod
     def convert_image_to_graph(image):

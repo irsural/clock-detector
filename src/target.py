@@ -61,8 +61,6 @@ def read_video(is_clock):
             break
 
 # read_video(False)
-
-
 def read_video_lines():
     video = cv2.VideoCapture(0)
 
@@ -84,46 +82,40 @@ def read_video_lines():
                     reader = tr.TimeReader()
                     temp_s = reader.get_seconds_by_lines(frame.copy())
                     if temp_s is not None:
-                        if temp_s > 0:
-                            temp_m = reader.get_minutes(frame)
+                        if 0 <= temp_s <= 5 or \
+                           28 <= temp_s <= 32 or \
+                           58 <= temp_s <= 60.5:
+                           temp_m = reader.get_minutes_by_graph(frame)
+                        else:
+                            temp_m = reader.get_minutes_by_lines(frame)
 
-                            if (0 <= temp_s <= 16 or temp_s > 58) and temp_m >= 30:
-                                temp_m = 0.0
+                        if temp_m is None:
+                            continue
 
-                            if temp_m > 0 and temp_s >= 35:
-                                temp_m -= 1
+                        if temp_m >= 29.8:
+                            temp_m = 0.0
 
-                            if temp_s >= 59.9:
-                                temp_s = 0.0
+                        if 58 <= temp_s <= 60.5 and temp_m > 0:
+                            temp_m -= 1
 
-                            minutes.append(temp_m)
-                            seconds.append(temp_s)
-                            count += 1
+                        minutes.append(temp_m)
+                        seconds.append(temp_s)
+                        count += 1
 
-                # if 0 <= np.median(seconds) <= 0.4 and np.mean(seconds) > 0.4:
-                #     second = np.median(seconds)
-                # else:
-                #     second = np.mean(seconds)
-                second = np.median(seconds)
-                second = 0.2*round(second/0.2)
+                mean_second = np.median(seconds)
+                mean_second = 0.2*round(mean_second/0.2)
 
-                if 59.9 <= (second) <= 60.5:
-                    second = 0
+                if 59.9 <= (mean_second) <= 60.5:
+                    mean_second = 0
 
-                minute = min(minutes)
-                if minute in [30, 15]:
-                    minute = 0
+                minute = np.median(minutes)
 
                 print('------------------------')
                 print(f'minutes: {minutes}')
                 print(f'second: {seconds}')
-                print(f'time: {int(minute)}:{toFixed(second, 1)}')
-
-                # cv2.imshow('lines', reader.get_time_by_lines(frame))
+                print(f'time: {int(minute)}:{toFixed(mean_second, 1)}')
             except Exception as e:
                 print(e)
-            # cv2.waitKey()
-
         elif key == ord('q'):
             cv2.destroyAllWindows()
             break
