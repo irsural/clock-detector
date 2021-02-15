@@ -213,7 +213,7 @@ class TimeReader:
         return im_thresh_gray
 
     def get_seconds_on_timer_by_lines(self, im):
-        np.warnings.filterwarnings('ignore')
+        # np.warnings.filterwarnings('ignore')
 
         im, _ = TimeReader.get_rotated(im, self.timer_templates[0])
         x, y, r = im.shape[0] // 2 - 2, im.shape[1] // 2, im.shape[0] // 2
