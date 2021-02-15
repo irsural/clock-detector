@@ -3,64 +3,58 @@ import cv2
 import numpy as np
 import config
 
-from matplotlib import pyplot as plt
-
-from detector import utilities
-from detector.exceptions import SearchingClockFaceError
-
 
 class ClockFace:
     """This class is used for computing working with a clock face.
     """
 
-    def __init__(self, image, min_radius, max_radius,
-                 blurring=config.CLOCK_FACE_DEFAULT_BLURRING):
-        self.image = image
-        self.min_radius = min_radius
-        self.max_radius = max_radius
-        self.center = None
-        self.radius = None
-        self.blurring = blurring
+    @staticmethod
+    def search_face(im1, im2):
+        MAX_FEATURES = 500
+        GOOD_MATCH_PERCENT = 0.15
 
-    def search_clock_face(self):
-        """Searches a clock face in an image.
+        # Convert images to grayscale
+        im1Gray = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+        im2Gray = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
 
-        Raises:
-            ClockFaceSearchingError: Raise if a clock face was not found.
+        # Detect ORB features and compute descriptors.
+        orb = cv2.ORB_create(MAX_FEATURES)
+        keypoints1, descriptors1 = orb.detectAndCompute(im1Gray, None)
+        keypoints2, descriptors2 = orb.detectAndCompute(im2Gray, None)
 
-        Returns:
-            turple(cut_image, (x, y), r):
-                cut_image is an image that cut by the circle's boards.
-                (x, y) - the central point of the clock face.
-                r - the radius of the clock face.
-        """
+        # Match features.
+        matcher = cv2.DescriptorMatcher_create(
+            cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING)
+        matches = matcher.match(descriptors1, descriptors2, None)
 
-        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-        blurred = cv2.medianBlur(gray, self.blurring)
+        # Sort matches by score
+        matches.sort(key=lambda x: x.distance, reverse=False)
 
-        circles = cv2.HoughCircles(
-            blurred,
-            cv2.HOUGH_GRADIENT,
-            1,
-            config.CLOCK_FACE_MIN_DIST,
-            param1=config.CLOCK_FACE_PARAM_1,
-            param2=config.CLOCK_FACE_PARAM_2,
-            minRadius=self.min_radius,
-            maxRadius=self.max_radius
-        )
+        # Remove not so good matches
+        numGoodMatches = int(len(matches) * GOOD_MATCH_PERCENT)
+        matches = matches[:numGoodMatches]
 
-        if circles is not None:
-            circles = np.uint16(np.around(circles))
-            x, y, r = circles[0][0]
+        # Draw top matches
+        imMatches = cv2.drawMatches(
+            im1, keypoints1, im2, keypoints2, matches, None)
+#         plt.imshow(imMatches), plt.show()
 
-            self.center = (x, y)
-            self.radius = r
+        # Extract location of good matches
+        points1 = np.zeros((len(matches), 2), dtype=np.float32)
+        points2 = np.zeros((len(matches), 2), dtype=np.float32)
 
-            cutImage = ClockFace.cut_image(self.image.copy(), (x, y), r)
+        for i, match in enumerate(matches):
+            points1[i, :] = keypoints1[match.queryIdx].pt
+            points2[i, :] = keypoints2[match.trainIdx].pt
 
-            return cutImage, (x, y), r
-        else:
-            raise SearchingClockFaceError
+        # Find homography
+        h, mask = cv2.findHomography(points1, points2, cv2.RANSAC)
+
+        # Use homography
+        height, width, channels = im2.shape
+        im1Reg = cv2.warpPerspective(im1, h, (width, height))
+
+        return im1Reg, h
 
     @staticmethod
     def wrap_polar_face(image,
@@ -82,8 +76,25 @@ class ClockFace:
         rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
         centre = rotate.shape[0] // 2
 
-        polarImage = cv2.warpPolar(rotate, (height, width), (centre, centre), centre,
-                                   cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
+        # TODO: There is gonna be something to wrap polar a part of image
+        polarImage = cv2.warpPolar(rotate, (height, width), (centre, centre),
+                                   centre, cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
+
+        cropImage = copy.deepcopy(polarImage[0:width, error_height:height])
+        cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+        return cropImage
+
+    @staticmethod
+    def wrap_polar_image(image,
+                         width=config.DEFAULT_WRAP_POLAR_WIDTH,
+                         height=config.DEFAULT_WRAP_POLAR_HEIGHT,
+                         error_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):
+        rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        centre = (0, 0)
+
+        polarImage = cv2.warpPolar(image, (height, width), centre,
+                                   image.shape[0], cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
 
         cropImage = copy.deepcopy(polarImage[0:width, error_height:height])
         cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)
