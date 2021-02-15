@@ -18,6 +18,8 @@ class TimeReader:
         self.clock_templates = [
             utilities.read_transparent_png(path_templates+'clock/face.png'),
             utilities.read_transparent_png(path_templates+'clock/second.png'),
+            utilities.read_transparent_png(path_templates+'clock/hour.png'),
+            utilities.read_transparent_png(path_templates+'clock/minute.png'),
         ]
 
         self.timer_templates = [
@@ -86,6 +88,9 @@ class TimeReader:
         _, rotated = TimeReader.get_rotated(im, self.clock_templates[0])
         part = np.copy(rotated[0:rotated.shape[0], 0:15])
         rotated = np.concatenate((rotated, part), axis=1)
+
+        plt.imshow(cf.ClockFace.wrap_polar_image(self.clock_templates[2])), plt.show()
+        plt.imshow(cf.ClockFace.wrap_polar_image(self.clock_templates[3])), plt.show()
 
         # Find second
         ######################################
@@ -460,6 +465,11 @@ class TimeReader:
             counter = 0
 
         return graph
+
+    def get_time_on_clock_w(self, im):
+        
+        
+        return (0, 0, 0)
 
     @staticmethod
     def get_rotated(image, template, err_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):

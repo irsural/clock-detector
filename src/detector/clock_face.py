@@ -93,7 +93,7 @@ class ClockFace:
         rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
         centre = (0, 0)
 
-        polarImage = cv2.warpPolar(rotate, (height, width), centre,
+        polarImage = cv2.warpPolar(image, (height, width), centre,
                                    image.shape[0], cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
 
         cropImage = copy.deepcopy(polarImage[0:width, error_height:height])

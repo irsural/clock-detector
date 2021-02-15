@@ -60,7 +60,7 @@ def read_video(is_clock):
             cv2.destroyAllWindows()
             break
 
-# read_video(False)
+
 def read_video_lines():
     video = cv2.VideoCapture(0)
 
@@ -85,7 +85,7 @@ def read_video_lines():
                         if 0 <= temp_s <= 5 or \
                            28 <= temp_s <= 32 or \
                            58 <= temp_s <= 60.5:
-                           temp_m = reader.get_minutes_by_graph(frame)
+                            temp_m = reader.get_minutes_by_graph(frame)
                         else:
                             temp_m = reader.get_minutes_by_lines(frame)
 
@@ -103,7 +103,7 @@ def read_video_lines():
                         count += 1
 
                 mean_second = np.median(seconds)
-                mean_second = 0.2*round(mean_second/0.2)
+                mean_second_round = 0.2*round(mean_second/0.2)
 
                 if 59.9 <= (mean_second) <= 60.5:
                     mean_second = 0
@@ -113,12 +113,60 @@ def read_video_lines():
                 print('------------------------')
                 print(f'minutes: {minutes}')
                 print(f'second: {seconds}')
-                print(f'time: {int(minute)}:{toFixed(mean_second, 1)}')
+                print(f'time: {int(minute)}:{toFixed(mean_second, 6)}')
+                print(f'time_round: {int(minute)}:{toFixed(mean_second_round, 1)}')
             except Exception as e:
                 print(e)
         elif key == ord('q'):
             cv2.destroyAllWindows()
             break
 
+def read_video_clock():
+    video = cv2.VideoCapture(0)
+
+    while (True):
+        key = cv2.waitKey(1) & 0xFF
+        ret, frame = video.read()
+
+        cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
+        cv2.imshow('frame', frame)
+
+        if key == ord('e'):
+            hours = []
+            minutes = []
+            seconds = []
+
+            count = 0
+            while count < 5:
+                ret, frame = video.read()
+                reader = tr.TimeReader()
+                try:
+                    # time = reader.get_time_on_clock_w(frame)
+                    time = reader.get_time_on_clock(frame)
+
+                    if time is None:
+                        continue
+
+                    hours.append(time[0])
+                    minutes.append(time[1])
+                    seconds.append(time[2])
+                except Exception as e:
+                    pass
+                count += 1
+
+            hour = np.median(hours)
+            minute = np.median(minutes)
+            second = np.median(seconds)
+
+            print('--------------------------')
+            print(f'hours: {hours}')
+            print(f'minutes: {minutes}')
+            print(f'seconds: {seconds}')
+            print(f'time: {hour}:{minute}:{second}')
+
+        elif key == ord('q'):
+            cv2.destroyAllWindows()
+            break
 
 read_video_lines()
+# read_video_clock()
