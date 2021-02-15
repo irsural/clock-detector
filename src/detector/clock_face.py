@@ -76,25 +76,8 @@ class ClockFace:
         rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
         centre = rotate.shape[0] // 2
 
-        # TODO: There is gonna be something to wrap polar a part of image
         polarImage = cv2.warpPolar(rotate, (height, width), (centre, centre),
                                    centre, cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
-
-        cropImage = copy.deepcopy(polarImage[0:width, error_height:height])
-        cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-        return cropImage
-
-    @staticmethod
-    def wrap_polar_image(image,
-                         width=config.DEFAULT_WRAP_POLAR_WIDTH,
-                         height=config.DEFAULT_WRAP_POLAR_HEIGHT,
-                         error_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):
-        rotate = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
-        centre = (0, 0)
-
-        polarImage = cv2.warpPolar(image, (height, width), centre,
-                                   image.shape[0], cv2.INTER_CUBIC + cv2.WARP_FILL_OUTLIERS + cv2.WARP_POLAR_LINEAR)
 
         cropImage = copy.deepcopy(polarImage[0:width, error_height:height])
         cropImage = cv2.rotate(cropImage, cv2.ROTATE_90_COUNTERCLOCKWISE)

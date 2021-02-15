@@ -52,8 +52,6 @@ class TimeReader:
         g_s_hand = utilities.get_correlation_graph(
             self.timer_templates[4], s_rotated)
 
-        # plt.plot(g_s_hand), plt.show()
-
         pos_hand = g_hand.index(max(g_hand))
         if config.DEFAULT_WRAP_POLAR_WIDTH - config.DEFAULT_WRAP_POLAR_WIDTH*0.83 <= pos_hand <= config.DEFAULT_WRAP_POLAR_WIDTH:
             max_pos_hand = 0
@@ -89,8 +87,10 @@ class TimeReader:
         part = np.copy(rotated[0:rotated.shape[0], 0:15])
         rotated = np.concatenate((rotated, part), axis=1)
 
-        plt.imshow(cf.ClockFace.wrap_polar_image(self.clock_templates[2])), plt.show()
-        plt.imshow(cf.ClockFace.wrap_polar_image(self.clock_templates[3])), plt.show()
+        plt.imshow(cf.ClockFace.wrap_polar_image(
+            self.clock_templates[2])), plt.show()
+        plt.imshow(cf.ClockFace.wrap_polar_image(
+            self.clock_templates[3])), plt.show()
 
         # Find second
         ######################################
@@ -212,40 +212,26 @@ class TimeReader:
 
         return im_thresh_gray
 
-    def find_lines(self, im):
-        im, _ = TimeReader.get_rotated(im, self.timer_templates[0])
-        dst = cv2.Canny(im, 200, 200, None, 3)
-
-        cv2.imshow('canny', dst)
-
-        lines = cv2.HoughLinesP(dst, 1, np.pi / 180, 10, None, 50, 10)
-
-        if lines is not None:
-            for i in range(0, len(lines)):
-                l = lines[i][0]
-                cv2.line(im, (l[0], l[1]), (l[2], l[3]),
-                         (0, 0, 255), 1, cv2.LINE_AA)
-
-        return im
-
-    def get_seconds_by_lines(self, im):
-        np.warnings.filterwarnings('ignore')
+    def get_seconds_on_timer_by_lines(self, im):
+        # np.warnings.filterwarnings('ignore')
 
         im, _ = TimeReader.get_rotated(im, self.timer_templates[0])
         x, y, r = im.shape[0] // 2 - 2, im.shape[1] // 2, im.shape[0] // 2
 
-        separation = 30.0 #in degrees
+        separation = 30.0  # in degrees
         interval = int(360 / separation)
-        p1 = np.zeros((interval,2))  #set empty arrays
-        p2 = np.zeros((interval,2))
-        p_text = np.zeros((interval,2))
+        p1 = np.zeros((interval, 2))  # set empty arrays
+        p2 = np.zeros((interval, 2))
+        p_text = np.zeros((interval, 2))
 
-        for i in range(0,interval):
-            for j in range(0,2):
-                if (j%2==0):
-                    p1[i][j] = x + 0.9 * r * np.cos(separation * i * 3.14 / 180) #point for lines
+        for i in range(0, interval):
+            for j in range(0, 2):
+                if (j % 2 == 0):
+                    p1[i][j] = x + 0.9 * r * \
+                        np.cos(separation * i * 3.14 / 180)  # point for lines
                 else:
-                    p1[i][j] = y + 0.9 * r * np.sin(separation * i * 3.14 / 180)
+                    p1[i][j] = y + 0.9 * r * \
+                        np.sin(separation * i * 3.14 / 180)
 
         for i in range(0, interval):
             for j in range(0, 2):
@@ -254,7 +240,6 @@ class TimeReader:
 
                 else:
                     p2[i][j] = y + r * np.sin(separation * i * 3.14 / 180)
-
 
         # Find hand
         gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
@@ -267,7 +252,8 @@ class TimeReader:
         min_line_length = 120
         max_line_gap = 250
 
-        lines = cv2.HoughLinesP(image=dst2, rho=3, theta=np.pi / 180, threshold=100,minLineLength=min_line_length, maxLineGap=0)
+        lines = cv2.HoughLinesP(image=dst2, rho=3, theta=np.pi / 180,
+                                threshold=100, minLineLength=min_line_length, maxLineGap=0)
 
         final_list = []
 
@@ -312,9 +298,10 @@ class TimeReader:
         cv2.line(im, (x, 0), (x, im.shape[0]), (0, 255, 0), 1)
         cv2.line(im, (p_x, p_y), (x, y), (0, 0, 255), 2)
 
-        #add the lines and labels to the image
-        for i in range(0,interval):
-            cv2.line(im, (int(p1[i][0]), int(p1[i][1])), (int(p2[i][0]), int(p2[i][1])),(0, 255, 0), 2)
+        # add the lines and labels to the image
+        for i in range(0, interval):
+            cv2.line(im, (int(p1[i][0]), int(p1[i][1])),
+                     (int(p2[i][0]), int(p2[i][1])), (0, 255, 0), 2)
 
         time = ((res+0.02) * 60) / 360
 
@@ -323,24 +310,29 @@ class TimeReader:
 
         return time
 
-    def get_minutes_by_lines(self, im):
+    def get_minutes_on_timer(self, im, by_graph: bool):
+        return self.get_minutes_on_timer_by_graph(im) if by_graph else self.get_minutes_on_timer_by_lines(im)
+
+    def get_minutes_on_timer_by_lines(self, im):
         face, _ = TimeReader.get_rotated(im, self.timer_templates[0])
         face = utilities.find_template(face, self.timer_templates[2])
 
         x, y, r = face.shape[0] // 2, face.shape[1] // 2, face.shape[0] // 2
 
-        separation = 10.0 #in degrees
+        separation = 10.0  # in degrees
         interval = int(360 / separation)
-        p1 = np.zeros((interval,2))  #set empty arrays
-        p2 = np.zeros((interval,2))
-        p_text = np.zeros((interval,2))
+        p1 = np.zeros((interval, 2))  # set empty arrays
+        p2 = np.zeros((interval, 2))
+        p_text = np.zeros((interval, 2))
 
-        for i in range(0,interval):
-            for j in range(0,2):
-                if (j%2==0):
-                    p1[i][j] = x + 0.9 * r * np.cos(separation * i * 3.14 / 180) #point for lines
+        for i in range(0, interval):
+            for j in range(0, 2):
+                if (j % 2 == 0):
+                    p1[i][j] = x + 0.9 * r * \
+                        np.cos(separation * i * 3.14 / 180)  # point for lines
                 else:
-                    p1[i][j] = y + 0.9 * r * np.sin(separation * i * 3.14 / 180)
+                    p1[i][j] = y + 0.9 * r * \
+                        np.sin(separation * i * 3.14 / 180)
 
         for i in range(0, interval):
             for j in range(0, 2):
@@ -359,7 +351,8 @@ class TimeReader:
         min_line_length = 30
         max_line_gap = 250
 
-        lines = cv2.HoughLinesP(image=dst2, rho=3, theta=np.pi / 180, threshold=100,minLineLength=min_line_length, maxLineGap=0)
+        lines = cv2.HoughLinesP(image=dst2, rho=3, theta=np.pi / 180,
+                                threshold=100, minLineLength=min_line_length, maxLineGap=0)
 
         final_list = []
 
@@ -408,9 +401,10 @@ class TimeReader:
         cv2.line(face, (0, y), (face.shape[1], y), (0, 255, 0), 1)
         cv2.line(face, (x, 0), (x, face.shape[0]), (0, 255, 0), 1)
 
-        #add the lines and labels to the image
-        for i in range(0,interval):
-            cv2.line(face, (int(p1[i][0]), int(p1[i][1])), (int(p2[i][0]), int(p2[i][1])),(0, 255, 0), 1)
+        # add the lines and labels to the image
+        for i in range(0, interval):
+            cv2.line(face, (int(p1[i][0]), int(p1[i][1])),
+                     (int(p2[i][0]), int(p2[i][1])), (0, 255, 0), 1)
 
         cv2.line(face, (p_x, p_y), (x, y), (0, 0, 255), 2)
 
@@ -419,7 +413,7 @@ class TimeReader:
 
         return time
 
-    def get_minutes_by_graph(self, im):
+    def get_minutes_on_timer_by_graph(self, im):
         rotated = TimeReader.get_rotated(im, self.timer_templates[0])
 
         s_rotated = utilities.find_template(
@@ -465,11 +459,6 @@ class TimeReader:
             counter = 0
 
         return graph
-
-    def get_time_on_clock_w(self, im):
-        
-        
-        return (0, 0, 0)
 
     @staticmethod
     def get_rotated(image, template, err_height=config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR):

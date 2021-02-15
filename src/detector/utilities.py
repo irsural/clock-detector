@@ -39,7 +39,7 @@ def get_correlation_graph(im1, im2):
             im1, (im1.shape[1], im2.shape[0]), interpolation=cv2.INTER_AREA)
 
     while not dx > im2.shape[1]:
-        # TODO: St relative values for computing height of image
+        # TODO: Set relative values for computing height of image
         # 85 is computed by (100 - 15) <-> (config.DEFAULT_WRAP_POLAR_HEIGHT - config.DEFAULT_WRAP_POLAR_HEIGHT_ERROR)
         part = np.copy(im2[85 - im2.shape[0]:im2.shape[0], x:dx])
         corr = cv2.matchTemplate(im1, part, cv2.TM_CCOEFF_NORMED)[0][0]
@@ -109,9 +109,12 @@ def coef_corr(im, template):
 
 
 def distance(point1, point2, point):
-    _abs = abs((point2[0]-point1[0])*(point1[1]-point[1])-(point1[0]-point[0])*(point2[1]-point1[1]))
-    _sqrt = math.sqrt(math.pow(point2[0]-point1[0], 2) + math.pow(point2[1]-point2[1], 2))
-    return _abs / _sqrt;
+    _abs = abs((point2[0]-point1[0])*(point1[1]-point[1]) -
+               (point1[0]-point[0])*(point2[1]-point1[1]))
+    _sqrt = math.sqrt(
+        math.pow(point2[0]-point1[0], 2) + math.pow(point2[1]-point2[1], 2))
+    return _abs / _sqrt
+
 
 def distance(point1, point2):
     return math.sqrt(math.pow(point2[0]-point1[0], 2) + math.pow(point2[1]-point1[1], 2))
