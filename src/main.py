@@ -1,12 +1,6 @@
 import cv2
 import numpy as np
-import pandas as pd
-import config
-
-from matplotlib import pyplot as plt
-from detector import clock_face as cf
 from detector import time_reader as tr
-from detector import utilities
 
 
 def toFixed(numObj, digits=0):
@@ -18,7 +12,7 @@ def filer_response(data):
     return data
 
 
-def read_video(is_clock):
+def read_time_by_graphs(is_clock):
     video = cv2.VideoCapture(0)
 
     while (True):
@@ -61,13 +55,14 @@ def read_video(is_clock):
             break
 
 
-def read_video_lines():
+def read_time_on_timer_by_lines():
     video = cv2.VideoCapture(0)
 
     while (True):
         key = cv2.waitKey(1) & 0xFF
 
         ret, frame = video.read()
+
         cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
         cv2.imshow('frame', frame)
 
@@ -80,14 +75,13 @@ def read_video_lines():
                 while count < 5:
                     ret, frame = video.read()
                     reader = tr.TimeReader()
-                    temp_s = reader.get_seconds_by_lines(frame.copy())
+                    temp_s = reader.get_seconds_on_timer_by_lines(frame.copy())
                     if temp_s is not None:
-                        if 0 <= temp_s <= 5 or \
-                           28 <= temp_s <= 32 or \
-                           58 <= temp_s <= 60.5:
-                            temp_m = reader.get_minutes_by_graph(frame)
-                        else:
-                            temp_m = reader.get_minutes_by_lines(frame)
+                        is_critical_zone = 0 <= temp_s <= 5 or \
+                            28 <= temp_s <= 32 or \
+                            58 <= temp_s <= 60.5
+                        temp_m = reader.get_minutes_on_timer(
+                            frame, is_critical_zone)
 
                         if temp_m is None:
                             continue
@@ -114,59 +108,10 @@ def read_video_lines():
                 print(f'minutes: {minutes}')
                 print(f'second: {seconds}')
                 print(f'time: {int(minute)}:{toFixed(mean_second, 6)}')
-                print(f'time_round: {int(minute)}:{toFixed(mean_second_round, 1)}')
+                print(
+                    f'time_round: {int(minute)}:{toFixed(mean_second_round, 1)}')
             except Exception as e:
                 print(e)
         elif key == ord('q'):
             cv2.destroyAllWindows()
             break
-
-def read_video_clock():
-    video = cv2.VideoCapture(0)
-
-    while (True):
-        key = cv2.waitKey(1) & 0xFF
-        ret, frame = video.read()
-
-        cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
-        cv2.imshow('frame', frame)
-
-        if key == ord('e'):
-            hours = []
-            minutes = []
-            seconds = []
-
-            count = 0
-            while count < 5:
-                ret, frame = video.read()
-                reader = tr.TimeReader()
-                try:
-                    # time = reader.get_time_on_clock_w(frame)
-                    time = reader.get_time_on_clock(frame)
-
-                    if time is None:
-                        continue
-
-                    hours.append(time[0])
-                    minutes.append(time[1])
-                    seconds.append(time[2])
-                except Exception as e:
-                    pass
-                count += 1
-
-            hour = np.median(hours)
-            minute = np.median(minutes)
-            second = np.median(seconds)
-
-            print('--------------------------')
-            print(f'hours: {hours}')
-            print(f'minutes: {minutes}')
-            print(f'seconds: {seconds}')
-            print(f'time: {hour}:{minute}:{second}')
-
-        elif key == ord('q'):
-            cv2.destroyAllWindows()
-            break
-
-read_video_lines()
-# read_video_clock()
